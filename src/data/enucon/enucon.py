@@ -7,7 +7,7 @@ import argparse
 import sys
 sys.setrecursionlimit(10000000)
 
-# NETWORK_NAME="50_germany"; for i in {2..5}; do python enucon.py simple-return 120 ${i} ../../../data/processed/networks/txt_format/${NETWORK_NAME}.txt ../../../data/processed/requests/${NETWORK_NAME}/; done
+# NETWORK_NAME="50_germany"; for i in {2..18}; do python enucon.py simple-return 120 ${i} ../../../data/processed/networks/txt_format/${NETWORK_NAME}.txt ../../../data/processed/requests/${NETWORK_NAME}/; done
 
 # first input is the name of the algorithm
 # second input is the time limit for each instance
