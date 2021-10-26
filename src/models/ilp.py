@@ -63,7 +63,14 @@ def lcrhpp_minh(network_operator=None, **kwargs):
 
         result = {
             'active hypervisors':
-            [h for h, v in active_hypervisors.items() if v.x > 0.9]
+            [h for h, v in active_hypervisors.items() if v.x > 0.9],
+            'hypervisor assignment': {
+                s: (h1, h2)
+                for ((h1, h2),
+                     s), v in hypervisor_pair_controls_switch.items()
+                if v.x > 0.9
+            },
+            'hypervisor2switch control paths': []
         }
         return result
 
@@ -74,7 +81,8 @@ def lcrhpp_minh(network_operator=None, **kwargs):
         print('Encountered an attribute error')
 
 
-def lcrhpp_maxa(network_operator=None, vSDN_requests=None, **kwargs):
+def lcrhpp_maxa(network_operator, vSDN_requests, **kwargs):
+    # print("Start LC RHPP max A")
     S = list(network_operator.nodes)
     H = list(network_operator.possible_hypervisors)
     C = list(network_operator.possible_controllers)
@@ -156,9 +164,20 @@ def lcrhpp_maxa(network_operator=None, vSDN_requests=None, **kwargs):
             gp.quicksum(controllable_request) / len(R), GRB.MAXIMIZE)
         model.optimize()
 
+        print(model.ObjVal)
+
         result = {
             'active hypervisors':
-            [h for h, v in active_hypervisors.items() if v.x > 0.9]
+            [h for h, v in active_hypervisors.items() if v.x > 0.9],
+            'hypervisor assignment': {
+                s: (h1, h2)
+                for ((h1, h2),
+                     s), v in hypervisor_pair_controls_switch.items()
+                if v.x > 0.9
+            },
+            'hypervisor2switch control paths': [],
+            'hp acceptance ratio':
+            model.ObjVal
         }
         return result
 

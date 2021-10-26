@@ -271,22 +271,22 @@ def hp_overall_coverage(network_operator=None,
 
 
 @measure
-def hypervison_placement_solutions(type: str = 'heuristics',
-                                   objective: str = 'hypervisor count',
+def hypervison_placement_solutions(hp_type: str = 'heuristics',
+                                   hp_objective: str = 'hypervisor count',
                                    **kwargs):
-    if type == 'heuristics':
-        if objective == 'hypervisor count':
+    if hp_type == 'heuristics':
+        if hp_objective == 'hypervisor count':
             return hp_multiple_greedy(**kwargs)
-        elif objective == 'main controller':
+        elif hp_objective == 'main controller':
             return hp_main_controller(**kwargs)
-        elif objective == 'overall coverage':
+        elif hp_objective == 'overall coverage':
             return hp_overall_coverage(**kwargs)
         else:
             return None
-    elif type == 'ilp':
-        if objective == 'hypervisor count':
+    elif hp_type == 'ilp':
+        if hp_objective == 'hypervisor count':
             return ilp.lcrhpp_minh(**kwargs)
-        if objective == 'acceptance ratio':
+        if hp_objective == 'acceptance ratio':
             return ilp.lcrhpp_maxa(**kwargs)
     else:
         return None

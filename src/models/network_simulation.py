@@ -5,7 +5,7 @@ import pprint
 
 # Local application/library specific imports.
 from src.models.network_operator import NetworkOperator
-from src.models.vSDN_request import generate_vSDN_requests
+from src.models import vSDN_request
 from src.logger import measure
 
 
@@ -17,15 +17,17 @@ class NetworkSimulation:
         self._network_path = f"../data/processed/networks/{self._network_name}.gml"
         self._request_folder = f"../data/processed/requests/{self._network_name}/"
         self._result_folder = f"../data/results/{self._network_name}/"
-        self.network_operator = NetworkOperator(path=self._network_path)
 
-        self.results = []
+        self.network_operator = NetworkOperator(path=self._network_path)
+        self.request_generator = vSDN_request.vSDN_request_generator(
+            self._network_name, self._request_folder, **kwargs)
+
         return
 
     def init_simulation(self, **kwargs) -> None:
         self.network_operator.set_max_length(**kwargs)
         self.network_operator.set_shortest_k(**kwargs)
-        self.control_path_calculation(**kwargs)
+        self.network_operator.control_path_calculation(**kwargs)
         return
 
     def request_simulation(self, **kwargs) -> None:
@@ -34,34 +36,29 @@ class NetworkSimulation:
         _, self.request_processing_time = self.setup_vSDN_requests(**kwargs)
         return
 
-    def control_path_calculation(self, **kwargs) -> None:
-        self.network_operator.construct_possible_paths(**kwargs)
-        self.network_operator.construct_path_disjoint_quartets(**kwargs)
-        self.network_operator.construct_path_disjoint_triplets(**kwargs)
-        return
-
     def hypervisor_placement(self, **kwargs) -> None:
-        self.network_operator.hypervisor_placement(**kwargs)
+        if kwargs.get('hp_type', '') == 'ilp' and kwargs.get(
+                'hp_objective', '') == 'acceptance ratio':
+            random_vSDN_requests = self.request_generator.get_random_vSDN_requests(
+                **kwargs)
+            self.vSDN_count_ilp = len(random_vSDN_requests)
+            self.vSDN_max_size_ilp = max(
+                [r.get_size() for r in random_vSDN_requests])
+            self.network_operator.hypervisor_placement(
+                **dict(kwargs, vSDN_requests=random_vSDN_requests))
+        else:
+            self.network_operator.hypervisor_placement(**kwargs)
         # _, _ = self.network_operator.get_hypervisor_switch_latencies()
         return
 
     def modify_hypervisor_placement(self, **kwargs) -> None:
         return
 
-    def discard_vSDNs(self, all: bool = False) -> None:
-        if all:
-            self.network_operator.discard_all_vSDNs()
-        else:
-            for id, vSDN in list(self.network_operator.active_vSDNs.items()):
-                if vSDN.get_end_time() == self._time:
-                    self.network_operator.discard_vSDN(id)
-        return
-
-    def generate_vSDN_requests(self, size_of_requests, **kwargs):
-        self.vSDN_size = size_of_requests
-        request_file_path = f"{self._request_folder}{self._network_name}.{str(size_of_requests)}.subgraphs"
-        self.vSDN_requests, self.vSDN_coverage, self.vSDN_count = generate_vSDN_requests(
-            request_file_path, **kwargs)
+    def generate_vSDN_requests(self, request_size, **kwargs):
+        self.vSDN_size = request_size
+        (self.vSDN_requests, self.vSDN_coverage,
+         self.vSDN_count) = self.request_generator.get_request_list(
+             request_size, **kwargs)
         return
 
     def check_new_vSDN_requests(self):
@@ -75,9 +72,16 @@ class NetworkSimulation:
         self.vSDN_accepted_count = self.network_operator.process_vSDN_requests(
             self.vSDN_requests, bool(self.get_vSDN_accepted_count()))
         _ = self.network_operator.get_control_path_stats()
-        # print(latency_factor, max_length, size_of_requests,
+        # print(latency_factor, max_length, request_size,
         #       len(self.network_operator.active_hypervisors), acceptance_ratio,
         #       *x)
+        return
+
+    def discard_vSDNs(self, all: bool = False) -> None:
+        if all:
+            self.network_operator.discard_all_vSDNs()
+        else:
+            self.network_operator.discard_old_vSDNs(self._time)
         return
 
     def next_timestep(self, **kwargs):
@@ -109,11 +113,16 @@ class NetworkSimulation:
             'hp_runtime': self.network_operator.get_hp_runtime(),
             'h_list': self.network_operator.get_active_hypervisors(),
             'h_count': self.network_operator.get_active_hypervisor_count(),
+            'vSDN_generator_seed': self.request_generator.get_seed(),
             'vSDN_size': self.vSDN_size,
             'vSDN_count': self.vSDN_count,
             'vSDN_coverage': self.vSDN_coverage,
+            'vSDN_count_ilp': getattr(self, 'vSDN_count_ilp', 0),
+            'vSDN_max_size_ilp': getattr(self, 'vSDN_max_size_ilp', 0),
             'acceptable_count': self.vSDN_accepted_count,
             'acceptance_ratio': self.vSDN_accepted_count / self.vSDN_count,
+            'acceptance_ratio_ilp':
+            self.network_operator.get_hp_acceptance_ratio(),
             'request_processing_time':
             float(f"{self.request_processing_time:.2f}"),
             'chs_avg': 0,

@@ -83,6 +83,12 @@ class NetworkOperator:
     def get_chs_cp_stat(self, key):
         return int(self.cp_stats.get(key, -1))
 
+    def get_node_count(self):
+        return len(self.nodes)
+
+    def get_hp_acceptance_ratio(self):
+        return self.hp_acceptance_ratio
+
     #@measure
     def construct_possible_paths(self, **kwargs):
         if 'max_length' not in kwargs and 'shortest_k' not in kwargs:
@@ -111,25 +117,31 @@ class NetworkOperator:
              max_length=self.max_length)
         return None
 
-    #@measure
-    def hypervisor_placement(self,
-                             hp_type: str = 'heuristics',
-                             repeat: int = None,
-                             hp_objective: str = 'hypervisor count',
-                             **kwargs):
-        self.hp_type = hp_type
-        self.hp_objective = hp_objective
-        self.hp_greedy_repeat = repeat
-        result, self.hp_runtime = hypervison_placement_solutions(
-            type=hp_type,
-            objective=hp_objective,
-            **{
-                'network_operator': self,
-                'repeat': repeat
-            })
+    def control_path_calculation(self, **kwargs) -> None:
+        self.construct_possible_paths(**kwargs)
+        self.construct_path_disjoint_quartets(**kwargs)
+        self.construct_path_disjoint_triplets(**kwargs)
+        return
 
+    #@measure
+    def hypervisor_placement(
+        self,
+        #  hp_type: str = 'heuristics',
+        #  repeat: int = None,
+        #  hp_objective: str = 'hypervisor count',
+        **kwargs):
+        # print(kwargs.keys())
+        self.hp_type = kwargs.get('hp_type')
+        self.hp_objective = kwargs.get('hp_objective')
+        self.hp_greedy_repeat = kwargs.get('repeat')
+        result, self.hp_runtime = hypervison_placement_solutions(**dict(
+            kwargs,
+            network_operator=self,
+        ))
+        # print(result)
         self.active_hypervisors = result.get('active hypervisors', [])
         # print("Active_hypervisors:", len(self.active_hypervisors))
+        self.hp_acceptance_ratio = result.get('hp acceptance ratio', None)
 
         if 'hypervisor assignment' in result:
             self.hypervisor_assignment = result.get('hypervisor assignment',
@@ -248,11 +260,18 @@ class NetworkOperator:
     def discard_vSDN(self, id):
         _ = self.active_vSDNs.pop(id, None)
         _ = self.vSDN_control_paths.pop(id, None)
+        _ = self.cp_stats.pop(id, None)
 
     def discard_all_vSDNs(self):
         self.active_vSDNs = {}
         self.vSDN_control_paths = {}
         self.cp_stats = {}
+
+    def discard_old_vSDNs(self, _time):
+        for id, vSDN in list(self.active_vSDNs.items()):
+            if vSDN.get_end_time() == _time:
+                self.discard_vSDN(id)
+        return
 
     def get_active_controllers(self):
         return [vSDN._controller for _, vSDN in self.active_vSDNs.items()]

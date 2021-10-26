@@ -11,8 +11,8 @@ import tqdm
 from src.models.network_simulation import NetworkSimulation
 from src.data.json_encoder import NumpyEncoder
 
-network_name = '37_cost'
-max_vSDN_size = 19
+network_name = '26_usa'
+max_vSDN_size = 14
 hp_type = 'heuristics'
 hp_objective = 'hypervisor count'
 simulation_logs = []
@@ -50,7 +50,7 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
         simulation_logs.append(ns.log_simulation())
 
 with open(
-        f"../results/{network_name}/{datetime.date.today()}-{network_name}-heu-hco.json",
+        f"../results/{network_name}/{datetime.date.today()}-{network_name}-ilp-hco.json",
         'w') as file:
     json.dump(simulation_logs,
               file,
