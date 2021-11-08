@@ -14,8 +14,8 @@ from src.data.json_encoder import NumpyEncoder
 networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 19),
             ('50_germany', 19)]
 network_name, max_vSDN_size = networks[1]
-hp_type = 'heuristics'
-hp_objective = 'hypervisor count'
+hp_type = 'ilp'
+hp_objective = 'acceptance ratio'
 simulation_logs = []
 
 possible_settings = {
@@ -41,12 +41,12 @@ possible_request_settings = {
 for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
     ns = NetworkSimulation(**setting)
     ns.init_simulation(**setting)
-    ns.run_simulation(possible_request_settings=possible_request_settings,
-                      **setting)
+    ns.baseline_simulation(possible_request_settings=possible_request_settings,
+                           **setting)
     simulation_logs.extend(ns.get_logs())
 
 with open(
-        f"../results/{network_name}/{datetime.date.today()}-{network_name}-heu-hco.json",
+        f"../results/{network_name}/{datetime.date.today()}-{network_name}-ilp-acc.json",
         'w') as file:
     json.dump(simulation_logs,
               file,

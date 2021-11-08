@@ -81,7 +81,7 @@ def lcrhpp_minh(network_operator=None, **kwargs):
         print('Encountered an attribute error')
 
 
-def lcrhpp_maxa(network_operator, vSDN_requests, **kwargs):
+def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
     # print("Start LC RHPP max A")
     S = list(network_operator.nodes)
     H = list(network_operator.possible_hypervisors)
@@ -157,14 +157,14 @@ def lcrhpp_maxa(network_operator, vSDN_requests, **kwargs):
         c_8 = model.addConstrs(controllable_request[r] == gp.or_(
             [controller_controls_request[(c, r)] for c in C]) for r in R)
 
-        c_9 = model.addConstr(gp.quicksum(active_hypervisors) <= 8)
+        c_9 = model.addConstr(gp.quicksum(active_hypervisors) <= h_count)
 
         # Maximize the acceptance ratio
         model.setObjective(
             gp.quicksum(controllable_request) / len(R), GRB.MAXIMIZE)
         model.optimize()
 
-        print(model.ObjVal)
+        # print(model.ObjVal)
 
         result = {
             'active hypervisors':

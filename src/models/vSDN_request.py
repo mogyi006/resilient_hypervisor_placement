@@ -154,7 +154,7 @@ class vSDN_request_generator:
             int(s)
             for s in linecache.getline(request_file_path, line_index).split()
         ]
-        print(line_index, switches)
+        # print(line_index, switches)
         controller = self.random_generator.choice(
             switches)  # ! controller selection
         TTL = self.random_generator.integers(1, TTL_range, 1)[0]

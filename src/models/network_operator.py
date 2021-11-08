@@ -174,19 +174,20 @@ class NetworkOperator:
 
     def find_controller_for_request(self, request):
         possible_controllers_ = set()
-        for s in request._switches:
+        for idx, s in enumerate(request._switches):
             h, h_ = self.hypervisor_assignment[s]
             possible_controllers_for_switch = set()
             for c in self.possible_controllers:
                 if (((c, h, h_, s) in self.quartets_by_controllers[c])
                         or ((c, h_, h, s) in self.quartets_by_controllers[c])):
                     possible_controllers_for_switch.add(c)
-            if not possible_controllers_:
+            if idx == 0:
                 possible_controllers_ |= possible_controllers_for_switch
             else:
                 possible_controllers_ &= possible_controllers_for_switch
         if possible_controllers_:
-            return random.choice(list(possible_controllers_))
+            return random.choice(
+                list(possible_controllers_))  # ! controller selection
         else:
             None
 
