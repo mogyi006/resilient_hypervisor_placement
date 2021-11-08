@@ -1,0 +1,30 @@
+[
+    {
+        "acceptable_count": 33, 
+        "acceptance_ratio": 0.9705882352941176, 
+        "chs_avg": 0, 
+        "chs_avg_b": 938, 
+        "chs_avg_p": 783, 
+        "chs_max_b": 1107, 
+        "chs_max_p": 1106, 
+        "cp_objective": "random", 
+        "diameter": 1586, 
+        "h_count": 4, 
+        "h_list": [
+            0, 
+            18, 
+            20, 
+            23
+        ], 
+        "ha_objective": "avg cp length", 
+        "hp_objective": "hypervisor count", 
+        "hp_runtime": 10.31, 
+        "hp_type": {
+            "hp_objective": "acceptance ratio", 
+            "hp_type": "ilp", 
+            "latency_factor": 0.7, 
+            "network_name": "25_italy", 
+            "repeat": 100, 
+            "shortest_k": 16, 
+            "vSDN_requests": [
+                
