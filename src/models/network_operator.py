@@ -1,5 +1,6 @@
 # Standard library imports.
 import random
+import copy
 
 # Related third party imports.
 import numpy as np
@@ -77,7 +78,7 @@ class NetworkOperator:
     def get_active_hypervisors(self):
         return list(self.active_hypervisors)
 
-    def get_active_hypervisor_count(self):
+    def get_active_hypervisor_count(self) -> int:
         return len(self.active_hypervisors)
 
     def get_chs_cp_stat(self, key):
@@ -117,6 +118,36 @@ class NetworkOperator:
              max_length=self.max_length)
         return None
 
+    def get_allowed_hypervisor_pairs_by_switch(self):
+        _, active_controllers_by_switch = self.get_active_CS_pairs()
+        allowed_hypervisor_pairs_by_switch = {}
+        for s, triplets in self.triplets_by_switches.items():
+            if s in active_controllers_by_switch.keys():
+                for i, c in enumerate(active_controllers_by_switch[s]):
+                    if i == 0:
+                        allowed_hypervisor_pairs_by_switch[
+                            s] = self.quartets_by_cs[(c, s)]
+                    else:
+                        allowed_hypervisor_pairs_by_switch[
+                            s] = allowed_hypervisor_pairs_by_switch[
+                                s].intersection(self.quartets_by_cs[(c, s)])
+            else:
+                allowed_hypervisor_pairs_by_switch[s] = set([
+                    (i, j) for _, i, j in triplets if (i <= j)
+                ])
+        return allowed_hypervisor_pairs_by_switch
+
+    def get_active_CS_pairs(self) -> set:
+        active_cs_pairs = set()
+        active_controllers_by_switch = {}
+        if len(self.vSDNs):
+            for id, vSDN in self.vSDNs.items():
+                c = vSDN.get_controller()
+                for s in vSDN.get_switches():
+                    active_cs_pairs.add((c, s))
+                    active_controllers_by_switch.setdefault(s, set()).add(c)
+        return active_cs_pairs, active_controllers_by_switch
+
     def control_path_calculation(self, **kwargs) -> None:
         self.construct_possible_paths(**kwargs)
         self.construct_path_disjoint_quartets(**kwargs)
@@ -139,15 +170,15 @@ class NetworkOperator:
             network_operator=self,
         ))
         # print(result)
-        self.active_hypervisors = result.get('active hypervisors', [])
+        self.active_hypervisors = result.get('active hypervisors', None)
         # print("Active_hypervisors:", len(self.active_hypervisors))
         self.hp_acceptance_ratio = result.get('hp acceptance ratio', None)
 
         if 'hypervisor assignment' in result:
             self.hypervisor_assignment = result.get('hypervisor assignment',
-                                                    [])
+                                                    None)
             self.hypervisor_switch_control_paths = result.get(
-                'hypervisor2switch control paths', [])
+                'hypervisor2switch control paths', None)
         else:
             self.hypervisor_assignment, self.hypervisor_switch_control_paths = gu.assign_switches_to_hypervisors(
                 S=self.nodes,
@@ -174,7 +205,7 @@ class NetworkOperator:
 
     def find_controller_for_request(self, request):
         possible_controllers_ = set()
-        for idx, s in enumerate(request._switches):
+        for idx, s in enumerate(request.get_switches()):
             h, h_ = self.hypervisor_assignment[s]
             possible_controllers_for_switch = set()
             for c in self.possible_controllers:
@@ -189,13 +220,21 @@ class NetworkOperator:
             return random.choice(
                 list(possible_controllers_))  # ! controller selection
         else:
-            None
+            return None
+
+    def preprocess_vSDN_requests(self):
+        # ! TODO
+        return
 
     def process_vSDN_requests(self, request_list, to_process: bool = True):
-        accepted = 0
-        if not to_process:
-            return accepted
-        for request in request_list:
+        n_requests = len(request_list)
+        accepted = [0] * n_requests
+
+        # if not to_process:
+        #     print("No request processing...")
+        #     return accepted
+
+        for i, request in enumerate(request_list):
             #print(request)
             # if request._controller not in self.possible_controllers:
             #     print("Invalid request:", "Wrong controller - ", request._controller)
@@ -211,33 +250,34 @@ class NetworkOperator:
                 continue
 
             possible = True
-            for s in request._switches:
+            for s in request.get_switches():
                 h, h_ = self.hypervisor_assignment[s]
                 if (((c, h, h_, s) in self.quartets_by_controllers[c])
                         or ((c, h_, h, s) in self.quartets_by_controllers[c])):
                     continue
                 else:
-                    #print(f"No path-disjoint control path")
+                    # print(f"No path-disjoint control path")
                     #print(c,h,h_,s)
                     #print(self.quartets_by_controllers[c])
                     possible = False
                     break
 
             if possible:
-                accepted += 1
-                self.active_vSDNs[request._id] = request
+                accepted[i] = 1
+                self.vSDNs[request._id] = copy.deepcopy(request)
+                self.vSDNs[request._id].set_controller(c)
                 self.vSDN_control_paths[request._id] = {}
                 for s in request._switches:
                     h, h_ = self.hypervisor_assignment[s]
                     self.vSDN_control_paths[request._id][(
                         c, s)] = routing.full_control_path(
                             self.possible_paths, c, h, h_, s, self.max_length)
-        # print("Acceptance ratio: ", accepted/len(request_list))
+        print("Acceptance ratio: ", sum(accepted) / n_requests)
         return accepted
 
     def get_control_path_stats(self):
         primary_path_lengths, secondary_path_lengths = [], []
-        for request_id in self.active_vSDNs.keys():
+        for request_id in self.vSDNs.keys():
             for _, p in self.vSDN_control_paths[request_id].items():
                 pl, ql = gu.control_path_length(p)
                 primary_path_lengths.append(pl)
@@ -259,20 +299,20 @@ class NetworkOperator:
             return
 
     def discard_vSDN(self, id):
-        _ = self.active_vSDNs.pop(id, None)
+        _ = self.vSDNs.pop(id, None)
         _ = self.vSDN_control_paths.pop(id, None)
         _ = self.cp_stats.pop(id, None)
 
     def discard_all_vSDNs(self):
-        self.active_vSDNs = {}
+        self.vSDNs = {}
         self.vSDN_control_paths = {}
         self.cp_stats = {}
 
     def discard_old_vSDNs(self, _time):
-        for id, vSDN in list(self.active_vSDNs.items()):
-            if vSDN.get_end_time() == _time:
+        for id, vSDN in list(self.vSDNs.items()):
+            if vSDN.get_end_time() <= _time:
                 self.discard_vSDN(id)
         return
 
     def get_active_controllers(self):
-        return [vSDN._controller for _, vSDN in self.active_vSDNs.items()]
+        return [vSDN._controller for _, vSDN in self.vSDNs.items()]

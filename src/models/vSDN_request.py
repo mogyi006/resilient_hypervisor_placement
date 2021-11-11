@@ -84,7 +84,7 @@ def generate_random_vSDN_requests(request_file_path_list,
 class vSDN_request(object):
     id_iter = itertools.count()
 
-    def __init__(self, controller, switches, TTL, time_):
+    def __init__(self, controller, switches, TTL, time_, **kwargs):
         self._id = next(vSDN_request.id_iter)
         self._controller = controller
         self._switches = switches
@@ -111,6 +111,12 @@ class vSDN_request(object):
 
     def get_switches(self):
         return self._switches
+
+    def get_controller(self):
+        return self._controller
+
+    def set_controller(self, c):
+        self._controller = c
 
 
 class vSDN_request_generator:
@@ -148,7 +154,6 @@ class vSDN_request_generator:
                               request_file_path,
                               line_index,
                               TTL_range: int = 10,
-                              start_time: int = 0,
                               **kwargs) -> vSDN_request:
         switches = [
             int(s)
@@ -158,7 +163,7 @@ class vSDN_request_generator:
         controller = self.random_generator.choice(
             switches)  # ! controller selection
         TTL = self.random_generator.integers(1, TTL_range, 1)[0]
-        return vSDN_request(controller, switches, TTL, start_time)
+        return vSDN_request(controller, switches, TTL, **kwargs)
 
     def get_request(self, request_size, **kwargs) -> vSDN_request:
         request_file_path = self.request_file_dict[request_size]['file_path']

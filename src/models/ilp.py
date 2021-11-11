@@ -17,8 +17,8 @@ def lcrhpp_minh(network_operator=None, **kwargs):
     H_pairs = list(itertools.combinations_with_replacement(H, 2))
     HS_pairs = list(itertools.product(H, S))
     HHS_pairs = list(itertools.product(H_pairs, S))
-    allowed_switch_H_pairs = gu.get_allowed_hypervisor_pairs_by_switch(
-        network_operator.triplets_by_switches)
+    allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
+    )
     try:
         model = gp.Model("ilp min h count")
 
@@ -72,6 +72,8 @@ def lcrhpp_minh(network_operator=None, **kwargs):
             },
             'hypervisor2switch control paths': []
         }
+        print(result['active hypervisors'])
+        print(result['hypervisor assignment'])
         return result
 
     except gp.GurobiError as e:
@@ -93,8 +95,8 @@ def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
     R = {r.get_id(): r.get_switches() for r in vSDN_requests}
     CR_pairs = list(itertools.product(C, R.keys()))
 
-    allowed_switch_H_pairs = gu.get_allowed_hypervisor_pairs_by_switch(
-        network_operator.triplets_by_switches)
+    allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
+    )
     allowed_cs_H_pairs = network_operator.quartets_by_cs
     try:
         model = gp.Model("ilp max a ratio")
@@ -179,6 +181,8 @@ def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
             'hp acceptance ratio':
             model.ObjVal
         }
+        print(result['active hypervisors'])
+        print(result['hypervisor assignment'])
         return result
 
     except gp.GurobiError as e:
