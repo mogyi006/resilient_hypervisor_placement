@@ -72,8 +72,8 @@ def lcrhpp_minh(network_operator=None, **kwargs):
             },
             'hypervisor2switch control paths': []
         }
-        print(result['active hypervisors'])
-        print(result['hypervisor assignment'])
+        # print(result['active hypervisors'])
+        # print(result['hypervisor assignment'])
         return result
 
     except gp.GurobiError as e:
@@ -181,8 +181,8 @@ def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
             'hp acceptance ratio':
             model.ObjVal
         }
-        print(result['active hypervisors'])
-        print(result['hypervisor assignment'])
+        # print(result['active hypervisors'])
+        # print(result['hypervisor assignment'])
         return result
 
     except gp.GurobiError as e:

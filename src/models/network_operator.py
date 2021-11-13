@@ -90,6 +90,9 @@ class NetworkOperator:
     def get_hp_acceptance_ratio(self):
         return self.hp_acceptance_ratio
 
+    def get_active_vSDN_count(self):
+        return len(self.vSDNs)
+
     #@measure
     def construct_possible_paths(self, **kwargs):
         if 'max_length' not in kwargs and 'shortest_k' not in kwargs:
@@ -222,11 +225,13 @@ class NetworkOperator:
         else:
             return None
 
-    def preprocess_vSDN_requests(self):
-        # ! TODO
-        return
+    def preprocess_vSDN_requests(self, request_list):
+        return self.process_vSDN_requests(request_list, deploy=False)
 
-    def process_vSDN_requests(self, request_list, to_process: bool = True):
+    def process_vSDN_requests(self,
+                              request_list,
+                              to_process: bool = True,
+                              deploy: bool = True):
         n_requests = len(request_list)
         accepted = [0] * n_requests
 
@@ -264,14 +269,16 @@ class NetworkOperator:
 
             if possible:
                 accepted[i] = 1
-                self.vSDNs[request._id] = copy.deepcopy(request)
-                self.vSDNs[request._id].set_controller(c)
-                self.vSDN_control_paths[request._id] = {}
-                for s in request._switches:
-                    h, h_ = self.hypervisor_assignment[s]
-                    self.vSDN_control_paths[request._id][(
-                        c, s)] = routing.full_control_path(
-                            self.possible_paths, c, h, h_, s, self.max_length)
+                if deploy:
+                    self.vSDNs[request._id] = copy.deepcopy(request)
+                    self.vSDNs[request._id].set_controller(c)
+                    self.vSDN_control_paths[request._id] = {}
+                    for s in request._switches:
+                        h, h_ = self.hypervisor_assignment[s]
+                        self.vSDN_control_paths[request._id][(
+                            c, s)] = routing.full_control_path(
+                                self.possible_paths, c, h, h_, s,
+                                self.max_length)
         print("Acceptance ratio: ", sum(accepted) / n_requests)
         return accepted
 

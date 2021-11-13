@@ -13,9 +13,10 @@ from src.data.json_encoder import NumpyEncoder
 
 networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 19),
             ('50_germany', 19)]
-network_name, max_vSDN_size = networks[2]
+network_name, max_vSDN_size = networks[0]
 hp_type = 'ilp'
 hp_objective = 'acceptance ratio'
+vSDN_count_ilp = 100
 simulation_logs = []
 
 possible_settings = {
@@ -27,7 +28,7 @@ possible_settings = {
     'hp_repeat': [10],
     'repeat': [100],
     'max_request_size': [max(2, int(max_vSDN_size / 2))],
-    'vSDN_count_ilp': [100],
+    'vSDN_count_ilp': [vSDN_count_ilp],
 }
 param_names_1 = list(possible_settings.keys())
 setting_generator = [
@@ -48,7 +49,7 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
     simulation_logs.extend(ns.get_logs())
 
 with open(
-        f"../results/{network_name}/{datetime.date.today()}-{network_name}-{hp_type[:3]}-acc.json",
+        f"../results/{network_name}/{datetime.date.today()}-{network_name}-{hp_type[:3]}-acc-{vSDN_count_ilp}.json",
         'w') as file:
     json.dump(simulation_logs,
               file,

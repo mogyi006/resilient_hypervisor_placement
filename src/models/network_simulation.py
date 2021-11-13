@@ -1,4 +1,5 @@
 # Standard library imports.
+from datetime import time
 import pickle
 import pprint
 from pathlib import Path
@@ -26,6 +27,7 @@ def generate_setting_list(setting_dict: dict = None) -> list:
 class NetworkSimulation:
     def __init__(self, network_name: str = None, **kwargs) -> None:
         self._time = 0
+        self.simulation_id = 0
 
         self._network_name = network_name
         self._network_path = f"../data/processed/networks/{self._network_name}.gml"
@@ -127,26 +129,55 @@ class NetworkSimulation:
         return
 
     def run_dynamic_simulation(self, timesteps, **kwargs):
+        self._time = 0
+        self.discard_vSDNs(all=True)
+        self.simulation_timesteps = timesteps
+
         if self._time == 0:
             self.hypervisor_placement(**kwargs)
 
-        for _ in range(timesteps):
+        for _ in range(self.simulation_timesteps):
             self.next_timestep(**kwargs)
             _ = self.log_simulation()
 
-    def run_optimal_dynamic_simulation(self, timesteps, **kwargs):
+    def run_optimal_dynamic_simulation(self, timesteps: int = 100, **kwargs):
+        self._time = 0
+        self.discard_vSDNs(all=True)
+        self.simulation_timesteps = timesteps
         min_h_count = self.get_minimal_hypervisor_count()
+
         for _ in range(timesteps):
             self.next_timestep(to_setup=False, **kwargs)
-            self.hypervisor_placement(
-                **{
-                    'hp_type': 'ilp',
-                    'hp_objective': 'acceptance ratio',
-                    'vSDN_requests_ilp': self.vSDN_requests,
-                    'h_count': min_h_count,
-                })
+            all_acceptable = (np.sum(self.preprocess_vSDN_requests()) ==
+                              self.get_vSDN_request_count())
+            current_placement = set(
+                self.network_operator.get_active_hypervisors())
+            if not all_acceptable:
+                self.hypervisor_placement(
+                    **{
+                        'hp_type': 'ilp',
+                        'hp_objective': 'acceptance ratio',
+                        'vSDN_requests_ilp': self.vSDN_requests,
+                        'h_count': min_h_count,
+                    })
+            new_placement = set(self.network_operator.get_active_hypervisors())
+            self.hp_changed = len(new_placement - current_placement)
+            # print(f"Current: {current_placement}\nNew: {new_placement}")
             self.setup_vSDN_requests()
             _ = self.log_simulation()
+
+    def run_multiple_dynamic_simulations(self,
+                                         sim_repeat: int = 10,
+                                         optimal: bool = False,
+                                         **kwargs):
+        self.delete_logs()
+        for sim_id in range(sim_repeat):
+            self.simulation_id = sim_id
+            if optimal:
+                self.run_optimal_dynamic_simulation(**kwargs)
+            else:
+                self.run_dynamic_simulation(**kwargs)
+        return
 
     def next_timestep(self,
                       to_setup: bool = True,
@@ -154,8 +185,16 @@ class NetworkSimulation:
                       **kwargs):
         self._time += 1
         self.discard_vSDNs()
+
+        switch_hpairs = self.network_operator.get_allowed_hypervisor_pairs_by_switch(
+        )
+        self.switch_hpair_count = [
+            len(switch_hpairs[s]) for s in self.network_operator.nodes
+        ]
+        self.TTL_max = kwargs.get('TTL_range', 0)
         self.vSDN_requests = self.request_generator.get_random_vSDN_requests(
             **dict(kwargs, total_count=request_per_timestep, time_=self._time))
+
         # ! Add vSDN preprocessing
         if to_setup:
             self.setup_vSDN_requests()
@@ -194,16 +233,21 @@ class NetworkSimulation:
         # print(self.vSDN_requests)
         return
 
-    def get_vSDN_requests_ilp(self, vSDN_count_ilp: int = 100, **kwargs):
+    def get_vSDN_requests_ilp(self,
+                              vSDN_count_ilp: int = 100,
+                              vSDN_size_ilp: int = None,
+                              **kwargs):
         if kwargs.get('vSDN_requests_ilp', None) is None:
             return self.request_generator_.get_random_vSDN_requests(
-                **dict(kwargs, total_count=vSDN_count_ilp, time_=self._time))
+                max_request_size=vSDN_size_ilp,
+                total_count=vSDN_count_ilp,
+                time_=self._time)
         else:
             return kwargs.get('vSDN_requests_ilp', None)
 
-    def check_new_vSDN_requests(self):
-
-        return
+    def preprocess_vSDN_requests(self):
+        return self.network_operator.preprocess_vSDN_requests(
+            request_list=self.vSDN_requests)
 
     @measure
     def setup_vSDN_requests(self, **kwargs) -> None:
@@ -249,6 +293,12 @@ class NetworkSimulation:
             self.network_operator.get_active_hypervisors(),
             'h_count':
             self.network_operator.get_active_hypervisor_count(),
+            'hp_changed':
+            self.get_hp_changed(),
+            'switch_hpair_count':
+            self.get_switch_hpair_count(),
+            'mean_switch_hpair_count':
+            np.mean(self.get_switch_hpair_count()),
             'vSDN_generator_seed':
             self.request_generator.get_seed(),
             'vSDN_size':
@@ -257,10 +307,16 @@ class NetworkSimulation:
             self.get_vSDN_request_count(),
             'vSDN_coverage':
             self.get_vSDN_request_coverage(),
+            'TTL_distribution':
+            'uniform',
+            'TTL_max':
+            self.get_TTL_max(),
             'vSDN_count_ilp':
             getattr(self, 'vSDN_count_ilp', 0),
             'vSDN_max_size_ilp':
             getattr(self, 'vSDN_max_size_ilp', 0),
+            'active_vSDN_count':
+            self.network_operator.get_active_vSDN_count(),
             'acceptable_count':
             self.get_vSDN_accepted_count(),
             'acceptance_ratio':
@@ -279,6 +335,10 @@ class NetworkSimulation:
             self.network_operator.get_chs_cp_stat('avg_b'),
             'chs_max_b':
             self.network_operator.get_chs_cp_stat('max_b'),
+            'timestep':
+            self._time,
+            'simulation_id':
+            self.simulation_id,
         }
         # pprint.pprint(log)
         self.logs.append(log)
@@ -309,3 +369,15 @@ class NetworkSimulation:
 
     def get_request_processing_time(self):
         return getattr(self, 'request_processing_time', 0)
+
+    def get_switch_hpair_count(self):
+        return getattr(self, 'switch_hpair_count', 0)
+
+    def get_hp_changed(self):
+        return getattr(self, 'hp_changed', False)
+
+    def get_simulation_timesteps(self):
+        return getattr(self, 'simulation_timesteps', 0)
+
+    def get_TTL_max(self):
+        return getattr(self, 'TTL_max', 0)
