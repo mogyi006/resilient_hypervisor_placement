@@ -95,3 +95,4 @@ data/processed/*
 
 # Dump files
 *.out
+*.json

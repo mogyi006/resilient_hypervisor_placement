@@ -13,7 +13,7 @@ from src.data.json_encoder import NumpyEncoder
 
 networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 19),
             ('50_germany', 19)]
-network_name, max_vSDN_size = networks[0]
+network_name, max_vSDN_size = networks[2]
 hp_type = 'ilp'
 hp_objective = 'acceptance ratio'
 vSDN_count_ilp = 100
@@ -29,8 +29,8 @@ possible_settings = {
     'sim_repeat': [10],
     'timesteps': [50],
     'max_request_size': [max_vSDN_size],
-    'request_per_timestep': [8],
-    'TTL_range': [8],
+    'request_per_timestep': [6],
+    'TTL_range': [6],
     'vSDN_count_ilp': [100],
     'vSDN_size_ilp': [max(2, int(max_vSDN_size / 2))]
 }
