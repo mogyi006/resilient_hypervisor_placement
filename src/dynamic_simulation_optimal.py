@@ -17,17 +17,17 @@ network_name, max_vSDN_size = networks[0]
 hp_type = 'ilp'
 hp_objective = 'acceptance ratio'
 vSDN_count_ilp = 100
-request_per_timestep = 5
-TTL_range = 5
+request_per_timestep = 8
+TTL_range = 8
 
 possible_settings = {
     'network_name': [network_name],
-    'latency_factor': np.arange(0.4, 0.7, 0.1),
+    'latency_factor': np.arange(0.4, 0.65, 0.05),
     'shortest_k': [16],
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],
     'sim_repeat': [10],
-    'timesteps': [100],
+    'timesteps': [50],
     'max_request_size': [max_vSDN_size],
     'request_per_timestep': [request_per_timestep],
     'TTL_range': [TTL_range],
@@ -48,7 +48,7 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
     simulation_logs.extend(ns.get_logs())
 
 with open(
-        f"../results/{network_name}/dynamic/{datetime.date.today()}-{network_name}-{hp_type[:3]}-opt.json",
+        f"../results/{network_name}/dynamic/{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')}-{network_name}-{hp_type[:3]}-opt.json",
         'w') as file:
     json.dump(simulation_logs,
               file,

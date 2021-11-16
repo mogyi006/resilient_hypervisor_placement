@@ -28,9 +28,9 @@ possible_settings = {
     'hp_objective': [hp_objective],
     'sim_repeat': [10],
     'timesteps': [50],
-    'max_request_size': list(range(max_vSDN_size - 4, max_vSDN_size + 1)),
-    'request_per_timestep': [4, 6, 8],
-    'TTL_range': [4, 6, 8],
+    'max_request_size': [max_vSDN_size],
+    'request_per_timestep': [8],
+    'TTL_range': [8],
     'vSDN_count_ilp': [100],
     'vSDN_size_ilp': [max(2, int(max_vSDN_size / 2))]
 }
@@ -48,7 +48,7 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
     simulation_logs.extend(ns.get_logs())
 
 with open(
-        f"../results/{network_name}/dynamic/{datetime.date.today()}-{network_name}-{hp_type[:3]}-acc.json",
+        f"../results/{network_name}/dynamic/{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')}-{network_name}-{hp_type[:3]}-acc.json",
         'w') as file:
     json.dump(simulation_logs,
               file,

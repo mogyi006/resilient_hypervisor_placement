@@ -47,7 +47,7 @@ class NetworkSimulation:
 
     def get_network_operator_path(self, latency_factor, shortest_k, **kwargs):
         return Path(
-            f"{self._network_operator_folder}{self._network_name}_L{str(int(latency_factor*10))}_k{shortest_k}.p"
+            f"{self._network_operator_folder}{self._network_name}_L{str(int(latency_factor*100))}_k{shortest_k}.p"
         )
 
     def is_network_operator_file_available(self, **kwargs):
@@ -192,6 +192,7 @@ class NetworkSimulation:
             len(switch_hpairs[s]) for s in self.network_operator.nodes
         ]
         self.TTL_max = kwargs.get('TTL_range', 0)
+        self.max_vSDN_size = kwargs.get('max_request_size', 0)
         self.vSDN_requests = self.request_generator.get_random_vSDN_requests(
             **dict(kwargs, total_count=request_per_timestep, time_=self._time))
 
@@ -303,6 +304,8 @@ class NetworkSimulation:
             self.request_generator.get_seed(),
             'vSDN_size':
             self.get_vSDN_size(),
+            'max_vSDN_size':
+            self.get_max_vSDN_size(),
             'vSDN_count':
             self.get_vSDN_request_count(),
             'vSDN_coverage':
@@ -339,6 +342,8 @@ class NetworkSimulation:
             self._time,
             'simulation_id':
             self.simulation_id,
+            'simulation_name':
+            self.get_simulation_name()
         }
         # pprint.pprint(log)
         self.logs.append(log)
@@ -381,3 +386,9 @@ class NetworkSimulation:
 
     def get_TTL_max(self):
         return getattr(self, 'TTL_max', 0)
+
+    def get_max_vSDN_size(self):
+        return getattr(self, 'max_vSDN_size', 0)
+
+    def get_simulation_name(self):
+        return f"L{int(100*self.network_operator.get_latency_factor())}_mrs{self.get_max_vSDN_size()}_rpt{self.get_vSDN_request_count()}_ttl{self.get_TTL_max()}"
