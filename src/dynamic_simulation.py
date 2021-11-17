@@ -11,11 +11,11 @@ import tqdm
 from src.models.network_simulation import NetworkSimulation
 from src.data.json_encoder import NumpyEncoder
 
-networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 19),
+networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 14),
             ('50_germany', 19)]
-network_name, max_vSDN_size = networks[2]
+network_name, max_vSDN_size = networks[1]
 hp_type = 'ilp'
-hp_objective = 'acceptance ratio'
+hp_objective = 'hypervisor count'
 vSDN_count_ilp = 100
 request_per_timestep = 5
 TTL_range = 5
@@ -48,7 +48,7 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
     simulation_logs.extend(ns.get_logs())
 
 with open(
-        f"../results/{network_name}/dynamic/{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')}-{network_name}-{hp_type[:3]}-acc.json",
+        f"../results/{network_name}/dynamic/{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')}-{network_name}-{hp_type[:3]}-hco.json",
         'w') as file:
     json.dump(simulation_logs,
               file,

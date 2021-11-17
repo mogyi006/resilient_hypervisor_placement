@@ -11,7 +11,7 @@ import tqdm
 from src.models.network_simulation import NetworkSimulation
 from src.data.json_encoder import NumpyEncoder
 
-networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 19),
+networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 14),
             ('50_germany', 19)]
 network_name, max_vSDN_size = networks[2]
 hp_type = 'ilp'
