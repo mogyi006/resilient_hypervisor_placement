@@ -204,9 +204,10 @@ class NetworkSimulation:
         if kwargs.get('hp_type', '') == 'ilp' and kwargs.get(
                 'hp_objective', '') == 'acceptance ratio':
             vSDN_requests_ilp = self.get_vSDN_requests_ilp(**kwargs)
-            self.vSDN_count_ilp = len(vSDN_requests_ilp)
-            self.vSDN_max_size_ilp = max(
-                [r.get_size() for r in vSDN_requests_ilp])
+            # print(vSDN_requests_ilp)
+            # self.vSDN_count_ilp = len(vSDN_requests_ilp)
+            # self.vSDN_max_size_ilp = max(
+            #     [r.get_size() for r in vSDN_requests_ilp])
             self.network_operator.hypervisor_placement(
                 **dict(kwargs,
                        vSDN_requests=vSDN_requests_ilp,
@@ -239,6 +240,8 @@ class NetworkSimulation:
                               vSDN_size_ilp: int = None,
                               **kwargs):
         if kwargs.get('vSDN_requests_ilp', None) is None:
+            self.vSDN_count_ilp = vSDN_count_ilp
+            self.vSDN_max_size_ilp = vSDN_size_ilp
             return self.request_generator_.get_random_vSDN_requests(
                 max_request_size=vSDN_size_ilp,
                 total_count=vSDN_count_ilp,
@@ -315,9 +318,9 @@ class NetworkSimulation:
             'TTL_max':
             self.get_TTL_max(),
             'vSDN_count_ilp':
-            getattr(self, 'vSDN_count_ilp', 0),
+            self.get_vSDN_count_ilp(),
             'vSDN_max_size_ilp':
-            getattr(self, 'vSDN_max_size_ilp', 0),
+            self.get_vSDN_max_size_ilp(),
             'active_vSDN_count':
             self.network_operator.get_active_vSDN_count(),
             'acceptable_count':
@@ -342,8 +345,10 @@ class NetworkSimulation:
             self._time,
             'simulation_id':
             self.simulation_id,
-            'simulation_name':
-            self.get_simulation_name()
+            'dynamic_simulation_name':
+            self.get_dynamic_simulation_name(),
+            'static_simulation_name':
+            self.get_static_simulation_name()
         }
         # pprint.pprint(log)
         self.logs.append(log)
@@ -390,5 +395,14 @@ class NetworkSimulation:
     def get_max_vSDN_size(self):
         return getattr(self, 'max_vSDN_size', 0)
 
-    def get_simulation_name(self):
+    def get_vSDN_max_size_ilp(self):
+        return getattr(self, 'vSDN_max_size_ilp', 0)
+
+    def get_vSDN_count_ilp(self):
+        return getattr(self, 'vSDN_count_ilp', 0)
+
+    def get_dynamic_simulation_name(self):
         return f"L{int(100*self.network_operator.get_latency_factor())}_mrs{self.get_max_vSDN_size()}_rpt{self.get_vSDN_request_count()}_ttl{self.get_TTL_max()}"
+
+    def get_static_simulation_name(self):
+        return f"L{int(100*self.network_operator.get_latency_factor())}_rsi{int(self.get_vSDN_max_size_ilp())}_rci{int(self.get_vSDN_count_ilp())}"
