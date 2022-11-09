@@ -146,7 +146,7 @@ class NetworkSimulation:
         self.simulation_timesteps = timesteps
         min_h_count = self.get_minimal_hypervisor_count()
 
-        for _ in range(timesteps):
+        for _ in range(self.simulation_timesteps):
             self.next_timestep(to_setup=False, **kwargs)
             all_acceptable = (np.sum(self.preprocess_vSDN_requests()) ==
                               self.get_vSDN_request_count())
@@ -203,15 +203,15 @@ class NetworkSimulation:
     def hypervisor_placement(self, **kwargs) -> None:
         if kwargs.get('hp_type', '') == 'ilp' and kwargs.get(
                 'hp_objective', '') == 'acceptance ratio':
-            vSDN_requests_ilp = self.get_vSDN_requests_ilp(**kwargs)
-            # print(vSDN_requests_ilp)
+
             # self.vSDN_count_ilp = len(vSDN_requests_ilp)
             # self.vSDN_max_size_ilp = max(
             #     [r.get_size() for r in vSDN_requests_ilp])
             self.network_operator.hypervisor_placement(
                 **dict(kwargs,
-                       vSDN_requests=vSDN_requests_ilp,
-                       h_count=self.get_minimal_hypervisor_count()))
+                       vSDN_requests=self.get_vSDN_requests_ilp(**kwargs),
+                       h_count=kwargs.get(
+                           'h_count', self.get_minimal_hypervisor_count())))
         else:
             self.network_operator.hypervisor_placement(**kwargs)
         # _, _ = self.network_operator.get_hypervisor_switch_latencies()
@@ -239,6 +239,8 @@ class NetworkSimulation:
                               vSDN_count_ilp: int = 100,
                               vSDN_size_ilp: int = None,
                               **kwargs):
+        """Returns vSDN requests for the ILP.
+        Generates new requests if a request list is not given."""
         if kwargs.get('vSDN_requests_ilp', None) is None:
             self.vSDN_count_ilp = vSDN_count_ilp
             self.vSDN_max_size_ilp = vSDN_size_ilp
