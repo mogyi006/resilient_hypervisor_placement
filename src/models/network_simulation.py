@@ -128,7 +128,7 @@ class NetworkSimulation:
                 **kwargs)
         return
 
-    def run_dynamic_simulation(self, timesteps, **kwargs):
+    def run_dynamic_simulation(self, timesteps: int = 100, **kwargs):
         self._time = 0
         self.discard_vSDNs(all=True)
         self.simulation_timesteps = timesteps
@@ -227,7 +227,7 @@ class NetworkSimulation:
     def modify_hypervisor_placement(self, **kwargs) -> None:
         return
 
-    def generate_vSDN_requests(self, request_size, **kwargs):
+    def generate_vSDN_requests(self, request_size: int, **kwargs):
         self.vSDN_size = request_size
         (self.vSDN_requests, self.vSDN_coverage,
          self.vSDN_count) = self.request_generator.get_request_list(

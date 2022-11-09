@@ -1,14 +1,12 @@
 # Standard library imports.
-from itertools import product, islice, combinations
-from multiprocessing.sharedctypes import Value
+import itertools
 
 # Related third party imports.
 import numpy as np
 import networkx as nx
-from copy import deepcopy
+import copy
 
 # Local application/library specific imports.
-"""Path-disjoint Set Cover"""
 
 # path: set of tuples
 # paths: list of path
@@ -46,7 +44,8 @@ def latency_of_path(G, p):
 
 def k_shortest_paths(G, u, v, k, weight="length"):
     """Get the k shortest paths between u and v according to the weight parameter"""
-    return list(islice(nx.shortest_simple_paths(G, u, v, weight=weight), k))
+    return list(
+        itertools.islice(nx.shortest_simple_paths(G, u, v, weight=weight), k))
 
 
 def get_paths(G,
@@ -73,7 +72,7 @@ def get_paths(G,
 def get_all_paths(G, **kwargs):
     """Get all simple paths between nodes"""
     all_paths = {}
-    for s, t in combinations(G.nodes, 2):
+    for s, t in itertools.combinations(G.nodes, 2):
         paths = get_paths(G=G, u=s, v=t, with_length=True, **kwargs)
         all_paths[(s, t)] = paths
         all_paths[(t, s)] = paths
@@ -102,7 +101,7 @@ def triangle_control_path(all_paths, c, h, h_, s, max_length):
     ]
 
     best_control_path = {}
-    for qc, ps, qs in product(Qc, Ps, Qs):
+    for qc, ps, qs in itertools.product(Qc, Ps, Qs):
         if (is_disjoint(ps['path'], qs['path'])
                 and is_disjoint(qc['path'], ps['path'])
                 and ps['length'] < max_length
@@ -145,7 +144,7 @@ def diamond_control_path(all_paths, c, h, h_, s, max_length):
     ]
 
     best_control_path = {}
-    for pc, qc, ps, qs in product(Pc, Qc, Ps, Qs):
+    for pc, qc, ps, qs in itertools.product(Pc, Qc, Ps, Qs):
         if (pc['length'] + ps['length'] < max_length
                 and qc['length'] + qs['length'] < max_length
                 and is_disjoint(pc['path'], qc['path'])
@@ -207,10 +206,10 @@ def full_control_path(all_paths, c, h, h_, s, max_length, **kwargs):
 def get_best_disjoint_path_pair(P, Q):
     """Find best disjoint path pair"""
     p_, q_ = {'path': None, 'length': np.inf}, {'path': None, 'length': np.inf}
-    for p, q in product(P, Q):
+    for p, q in itertools.product(P, Q):
         if is_disjoint(p['path'], q['path']) and is_better_path_pair(
                 p_, q_, p, q):
-            p_, q_ = deepcopy(p), deepcopy(q)
+            p_, q_ = copy.deepcopy(p), copy.deepcopy(q)
 
     if not p_['path'] or not q_['path']:
         # print("No disjoint path-pair found!")
