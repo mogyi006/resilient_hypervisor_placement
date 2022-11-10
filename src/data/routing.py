@@ -1,21 +1,22 @@
 # Standard library imports.
-from itertools import product, islice, combinations
+import itertools
 
 # Related third party imports.
 import numpy as np
 import networkx as nx
-from copy import deepcopy
+import copy
 
 # Local application/library specific imports.
-"""Path-disjoint Set Cover"""
 
 # path: set of tuples
 # paths: list of path
 
 
-# Check if 2 paths are link disjoint
 def is_disjoint(p, q):
-    if not p or not q:
+    """Check if 2 paths are link disjoint."""
+    if p is None or q is None:
+        raise ValueError
+    elif not p or not q:
         return False
     elif isinstance(p, set) and isinstance(q, set):
         return p.isdisjoint(q)
@@ -26,8 +27,8 @@ def is_disjoint(p, q):
         return p_.isdisjoint(q_)
 
 
-# Node list -> Edge list
 def path_as_edges(path):
+    """Convert list of nodes to list of edges connecting them."""
     if all(isinstance(x, int) for x in path):
         return set(zip(path[0::], path[1::]))
     elif all(isinstance(x, tuple) for x in path):
@@ -36,21 +37,17 @@ def path_as_edges(path):
         raise TypeError
 
 
-# Latency of an Edge list (list of tuples)
 def latency_of_path(G, p):
-    length = 0
-    for u, v in p:
-        length += G[u][v]['length']
-    return length
+    """Calculate the latency of an Edge list"""
+    return sum([G[u][v]['length'] for u, v in path_as_edges(p)])
 
 
-# Get the k shortest paths between u and v according to the weight parameter
 def k_shortest_paths(G, u, v, k, weight="length"):
-    return list(islice(nx.shortest_simple_paths(G, u, v, weight=weight), k))
+    """Get the k shortest paths between u and v according to the weight parameter"""
+    return list(
+        itertools.islice(nx.shortest_simple_paths(G, u, v, weight=weight), k))
 
 
-# Get the k shortest paths between u and v
-# with lower length than max_length
 def get_paths(G,
               u,
               v,
@@ -58,6 +55,7 @@ def get_paths(G,
               shortest_k: int = 16,
               with_length: bool = False,
               **kwargs):
+    """Get the k shortest paths between u and v with lower length than max_length"""
     shortest_k_path = k_shortest_paths(G, u, v, shortest_k)
     paths = []
     for path in shortest_k_path:
@@ -71,25 +69,26 @@ def get_paths(G,
     return paths
 
 
-# All simple paths between nodes
 def get_all_paths(G, **kwargs):
+    """Get all simple paths between nodes"""
     all_paths = {}
-    for s, t in combinations(G.nodes, 2):
+    for s, t in itertools.combinations(G.nodes, 2):
         paths = get_paths(G=G, u=s, v=t, with_length=True, **kwargs)
         all_paths[(s, t)] = paths
         all_paths[(t, s)] = paths
     return all_paths
 
 
-# Get all shortest paths between u and v
 def get_shortest_paths(G, u, v):
+    """Get all shortest paths between u and v"""
     return list(
         set(zip(path[0::], path[1::]))
         for path in nx.all_shortest_paths(G, u, v))
 
 
-# c = h, h_ != s
 def triangle_control_path(all_paths, c, h, h_, s, max_length):
+    """Find best triangle control path
+    c = h, h_ != s"""
     # no Pc
     Ps = [p for p in all_paths[(h, s)] if p['length'] < max_length]
     Qc = [
@@ -102,7 +101,7 @@ def triangle_control_path(all_paths, c, h, h_, s, max_length):
     ]
 
     best_control_path = {}
-    for qc, ps, qs in product(Qc, Ps, Qs):
+    for qc, ps, qs in itertools.product(Qc, Ps, Qs):
         if (is_disjoint(ps['path'], qs['path'])
                 and is_disjoint(qc['path'], ps['path'])
                 and ps['length'] < max_length
@@ -126,6 +125,7 @@ def triangle_control_path(all_paths, c, h, h_, s, max_length):
 
 
 def diamond_control_path(all_paths, c, h, h_, s, max_length):
+    """Find best diamond control path"""
     Pc = [
         p for p in all_paths[(c, h)]
         if p['length'] + all_paths[(h, s)][0]['length'] < max_length
@@ -144,7 +144,7 @@ def diamond_control_path(all_paths, c, h, h_, s, max_length):
     ]
 
     best_control_path = {}
-    for pc, qc, ps, qs in product(Pc, Qc, Ps, Qs):
+    for pc, qc, ps, qs in itertools.product(Pc, Qc, Ps, Qs):
         if (pc['length'] + ps['length'] < max_length
                 and qc['length'] + qs['length'] < max_length
                 and is_disjoint(pc['path'], qc['path'])
@@ -170,8 +170,8 @@ def diamond_control_path(all_paths, c, h, h_, s, max_length):
     return best_control_path
 
 
-# Best Controller - Hypervisor - Switch control path
 def full_control_path(all_paths, c, h, h_, s, max_length, **kwargs):
+    """Find Best Controller - Hypervisor - Switch control path"""
     control_path = {}
 
     # (c,c,c,c)
@@ -204,11 +204,12 @@ def full_control_path(all_paths, c, h, h_, s, max_length, **kwargs):
 
 
 def get_best_disjoint_path_pair(P, Q):
+    """Find best disjoint path pair"""
     p_, q_ = {'path': None, 'length': np.inf}, {'path': None, 'length': np.inf}
-    for p, q in product(P, Q):
+    for p, q in itertools.product(P, Q):
         if is_disjoint(p['path'], q['path']) and is_better_path_pair(
                 p_, q_, p, q):
-            p_, q_ = deepcopy(p), deepcopy(q)
+            p_, q_ = copy.deepcopy(p), copy.deepcopy(q)
 
     if not p_['path'] or not q_['path']:
         # print("No disjoint path-pair found!")

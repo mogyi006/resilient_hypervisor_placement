@@ -1,6 +1,7 @@
 # Standard library imports.
 import random
 import copy
+from typing import Sequence
 
 # Related third party imports.
 import numpy as np
@@ -12,6 +13,7 @@ from src.logger import measure
 import src.data.routing as routing
 import src.data.graph_utilities as gu
 from src.models.hypervisor_placement import hypervison_placement_solutions
+from src.models.vSDN_request import vSDN_request
 
 
 # Network operator class
@@ -144,7 +146,7 @@ class NetworkOperator:
         active_cs_pairs = set()
         active_controllers_by_switch = {}
         if len(self.vSDNs):
-            for id, vSDN in self.vSDNs.items():
+            for _, vSDN in self.vSDNs.items():
                 c = vSDN.get_controller()
                 for s in vSDN.get_switches():
                     active_cs_pairs.add((c, s))
@@ -158,12 +160,7 @@ class NetworkOperator:
         return
 
     #@measure
-    def hypervisor_placement(
-        self,
-        #  hp_type: str = 'heuristics',
-        #  repeat: int = None,
-        #  hp_objective: str = 'hypervisor count',
-        **kwargs):
+    def hypervisor_placement(self, **kwargs):
         # print(kwargs.keys())
         self.hp_type = kwargs.get('hp_type')
         self.hp_objective = kwargs.get('hp_objective')
@@ -206,7 +203,7 @@ class NetworkOperator:
         print(f"Secondary--\t{np.amax(secondary_paths):5.1f}")
         return primary_paths, secondary_paths
 
-    def find_controller_for_request(self, request):
+    def find_controller_for_request(self, request: vSDN_request):
         possible_controllers_ = set()
         for idx, s in enumerate(request.get_switches()):
             h, h_ = self.hypervisor_assignment[s]
@@ -225,19 +222,18 @@ class NetworkOperator:
         else:
             return None
 
-    def preprocess_vSDN_requests(self, request_list):
+    def preprocess_vSDN_requests(self, request_list: Sequence[vSDN_request]):
         return self.process_vSDN_requests(request_list, deploy=False)
 
     def process_vSDN_requests(self,
-                              request_list,
+                              request_list: Sequence[vSDN_request],
                               to_process: bool = True,
                               deploy: bool = True):
-        n_requests = len(request_list)
-        accepted = [0] * n_requests
+        accepted = [False] * len(request_list)
 
-        # if not to_process:
-        #     print("No request processing...")
-        #     return accepted
+        if not to_process:
+            print("No request processing...")
+            return accepted
 
         for i, request in enumerate(request_list):
             #print(request)
@@ -268,7 +264,7 @@ class NetworkOperator:
                     break
 
             if possible:
-                accepted[i] = 1
+                accepted[i] = True
                 if deploy:
                     self.vSDNs[request._id] = copy.deepcopy(request)
                     self.vSDNs[request._id].set_controller(c)
@@ -279,7 +275,7 @@ class NetworkOperator:
                             c, s)] = routing.full_control_path(
                                 self.possible_paths, c, h, h_, s,
                                 self.max_length)
-        print("Acceptance ratio: ", sum(accepted) / n_requests)
+        print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted
 
     def get_control_path_stats(self):
