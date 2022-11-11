@@ -246,14 +246,14 @@ class NetworkOperator:
             return accepted
 
         for i, request in enumerate(request_list):
-            self.vSDN_history[request._id] = copy.deepcopy(request)
+            self.vSDN_history[request.id] = copy.deepcopy(request)
             #print(request)
             # if request._controller not in self.possible_controllers:
             #     print("Invalid request:", "Wrong controller - ", request._controller)
             #     continue
-            if not (set(request._switches) <= set(self.nodes)):
+            if not (set(request.get_switches()) <= set(self.nodes)):
                 print("Invalid request:", "Wrong switches - ",
-                      request._switches)
+                      request.get_switches())
                 continue
 
             c = self.find_controller_for_request(request)
@@ -282,14 +282,14 @@ class NetworkOperator:
             if possible:
                 request.set_controller(c)
                 request.set_status(True)
-                self.vSDNs[request._id] = copy.deepcopy(request)
-                self.vSDN_control_paths[request._id] = {}
-                for s in request._switches:
+                self.vSDNs[request.id] = copy.deepcopy(request)
+                self.vSDN_control_paths[request.id] = {}
+                for s in request.get_switches():
                     h, h_ = self.hypervisor_assignment[s]
-                    self.vSDN_control_paths[request._id][(
+                    self.vSDN_control_paths[request.id][(
                         c, s)] = routing.full_control_path(
                             self.possible_paths, c, h, h_, s, self.max_length)
-                self.vSDN_history[request._id] = copy.deepcopy(request)
+                self.vSDN_history[request.id] = copy.deepcopy(request)
 
         print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted

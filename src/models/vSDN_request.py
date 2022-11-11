@@ -86,46 +86,49 @@ class vSDN_request(object):
     id_iter = itertools.count()
 
     def __init__(self, controller, switches, TTL, QoS, time_, **kwargs):
-        self._id = next(vSDN_request.id_iter)
-        self._controller = controller
-        self._switches = switches
-        self._TTL = TTL
-        self._start_time = time_
-        self._end_time = time_ + TTL
-        self._QoS = QoS
-        self._status = False
+        self.id = next(vSDN_request.id_iter)
+        self.controller = controller
+        self.switches = switches
+        self.TTL = TTL
+        self.start_time = time_
+        self.end_time = time_ + TTL
+        self.QoS = QoS
+        self.status = False
 
     def __repr__(self) -> str:
-        return "%3s %3s %10s %3s" % (self._id, self._controller,
-                                     self._switches, self._TTL)
-        # return f"{self._id}\t{self._controller}\t{self._switches}\t{self._TTL}"
+        return "%3s %3s %10s %3s" % (self.id, self.controller, self.switches,
+                                     self.TTL)
+        # return f"{self.id}\t{self.controller}\t{self.switches}\t{self.TTL}"
 
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
 
     def get_size(self) -> int:
-        return len(self._switches)
+        return len(self.switches)
+
+    def get_start_time(self):
+        return self.start_time
 
     def get_end_time(self):
-        return self._end_time
+        return self.end_time
 
     def get_id(self):
-        return self._id
+        return self.id
 
     def get_switches(self):
-        return self._switches
+        return self.switches
 
     def get_controller(self):
-        return self._controller
+        return self.controller
 
     def set_controller(self, c):
-        self._controller = c
+        self.controller = c
 
     def get_status(self):
-        return self._status
+        return self.status
 
     def set_status(self, new_status):
-        self._status = new_status
+        self.status = new_status
 
 
 class vSDN_request_generator:
