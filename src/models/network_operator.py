@@ -1,7 +1,7 @@
 # Standard library imports.
 import random
 import copy
-from typing import Sequence
+from typing import List
 
 # Related third party imports.
 import numpy as np
@@ -13,13 +13,12 @@ from src.logger import measure
 import src.data.routing as routing
 import src.data.graph_utilities as gu
 from src.models.hypervisor_placement import hypervison_placement_solutions
-from src.models.vSDN_request import vSDN_request
+from src.models import vSDN_request
 
 
 # Network operator class
 class NetworkOperator:
     def __init__(self, path: str, label: str = 'id', **kwargs):
-
         self.graph = nx.read_gml(path=path, label=label)
         self.nodes = list(self.graph.nodes)
         self.links = set(self.graph.edges)
@@ -37,8 +36,12 @@ class NetworkOperator:
         self.hypervisor_assignment = {}
         self.hypervisor_switch_control_paths = {}
 
+        self.vSDN_history = {}
         self.vSDNs = {}
         self.vSDN_control_paths = {}
+
+    def __getattribute__(self, name: str):
+        return object.__getattribute__(self, name)
 
     def get_graph_diameter(self):
         return self.graph_diameter
@@ -124,6 +127,8 @@ class NetworkOperator:
         return None
 
     def get_allowed_hypervisor_pairs_by_switch(self):
+        """Return the hypervisor pairs that enable control paths
+        with the current latency requirement."""
         _, active_controllers_by_switch = self.get_active_CS_pairs()
         allowed_hypervisor_pairs_by_switch = {}
         for s, triplets in self.triplets_by_switches.items():
@@ -222,13 +227,18 @@ class NetworkOperator:
         else:
             return None
 
-    def preprocess_vSDN_requests(self, request_list: Sequence[vSDN_request]):
+    def preprocess_vSDN_requests(
+            self, request_list: List[vSDN_request.vSDN_request]) -> List[bool]:
         return self.process_vSDN_requests(request_list, deploy=False)
 
     def process_vSDN_requests(self,
-                              request_list: Sequence[vSDN_request],
+                              request_list: List[vSDN_request.vSDN_request],
                               to_process: bool = True,
-                              deploy: bool = True):
+                              deploy: bool = True) -> List[bool]:
+
+        if 'vSDN_history' not in dir(self):
+            self.vSDN_history = {}
+
         accepted = [False] * len(request_list)
 
         if not to_process:
@@ -236,6 +246,7 @@ class NetworkOperator:
             return accepted
 
         for i, request in enumerate(request_list):
+            self.vSDN_history[request._id] = copy.deepcopy(request)
             #print(request)
             # if request._controller not in self.possible_controllers:
             #     print("Invalid request:", "Wrong controller - ", request._controller)
@@ -263,22 +274,27 @@ class NetworkOperator:
                     possible = False
                     break
 
+            accepted[i] = possible
+
+            if not deploy:
+                continue
+
             if possible:
-                accepted[i] = True
-                if deploy:
-                    self.vSDNs[request._id] = copy.deepcopy(request)
-                    self.vSDNs[request._id].set_controller(c)
-                    self.vSDN_control_paths[request._id] = {}
-                    for s in request._switches:
-                        h, h_ = self.hypervisor_assignment[s]
-                        self.vSDN_control_paths[request._id][(
-                            c, s)] = routing.full_control_path(
-                                self.possible_paths, c, h, h_, s,
-                                self.max_length)
+                request.set_controller(c)
+                request.set_status(True)
+                self.vSDNs[request._id] = copy.deepcopy(request)
+                self.vSDN_control_paths[request._id] = {}
+                for s in request._switches:
+                    h, h_ = self.hypervisor_assignment[s]
+                    self.vSDN_control_paths[request._id][(
+                        c, s)] = routing.full_control_path(
+                            self.possible_paths, c, h, h_, s, self.max_length)
+                self.vSDN_history[request._id] = copy.deepcopy(request)
+
         print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted
 
-    def get_control_path_stats(self):
+    def get_control_path_stats(self) -> None:
         primary_path_lengths, secondary_path_lengths = [], []
         for request_id in self.vSDNs.keys():
             for _, p in self.vSDN_control_paths[request_id].items():
@@ -301,21 +317,23 @@ class NetworkOperator:
             self.cp_stats = {}
             return
 
-    def discard_vSDN(self, id):
+    def discard_vSDN(self, id) -> None:
         _ = self.vSDNs.pop(id, None)
         _ = self.vSDN_control_paths.pop(id, None)
         _ = self.cp_stats.pop(id, None)
+        return
 
-    def discard_all_vSDNs(self):
+    def discard_all_vSDNs(self) -> None:
         self.vSDNs = {}
         self.vSDN_control_paths = {}
         self.cp_stats = {}
+        return
 
-    def discard_old_vSDNs(self, _time):
+    def discard_old_vSDNs(self, _time) -> None:
         for id, vSDN in list(self.vSDNs.items()):
             if vSDN.get_end_time() <= _time:
                 self.discard_vSDN(id)
         return
 
-    def get_active_controllers(self):
+    def get_active_controllers(self) -> list:
         return [vSDN._controller for _, vSDN in self.vSDNs.items()]

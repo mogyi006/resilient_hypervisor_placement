@@ -1,9 +1,10 @@
 # Standard library imports.
-from datetime import time
+import datetime
 import pickle
 import pprint
 from pathlib import Path
 import itertools
+from typing import List
 
 # Related third party imports.
 import numpy as np
@@ -32,7 +33,7 @@ class NetworkSimulation:
         self._network_name = network_name
         self._network_path = f"../data/processed/networks/{self._network_name}.gml"
         self._request_folder = f"../data/processed/requests/{self._network_name}/"
-        self._result_folder = f"../data/results/{self._network_name}/"
+        self._result_folder = f"../results/{self._network_name}/"
         self._network_operator_folder = f"../data/processed/network_operators/{self._network_name}/"
 
         self.init_network_operator(**kwargs)
@@ -50,7 +51,7 @@ class NetworkSimulation:
             f"{self._network_operator_folder}{self._network_name}_L{str(int(latency_factor*100))}_k{shortest_k}.p"
         )
 
-    def is_network_operator_file_available(self, **kwargs):
+    def is_network_operator_file_available(self, **kwargs) -> bool:
         network_operator_path = self.get_network_operator_path(**kwargs)
         return network_operator_path.is_file()
 
@@ -67,9 +68,7 @@ class NetworkSimulation:
     def save_network_operator(self, **kwargs) -> None:
         network_operator_path = self.get_network_operator_path(**kwargs)
         if not self.is_network_operator_file_available(**kwargs):
-            with open(network_operator_path, 'wb') as outp:
-                pickle.dump(self.network_operator, outp,
-                            pickle.HIGHEST_PROTOCOL)
+            self.save2pickle(network_operator_path, self.network_operator)
         return
 
     def init_simulation(self, **kwargs) -> None:
@@ -128,19 +127,21 @@ class NetworkSimulation:
                 **kwargs)
         return
 
-    def run_dynamic_simulation(self, timesteps: int = 100, **kwargs):
+    def run_dynamic_simulation(self, timesteps: int = 100, **kwargs) -> None:
         self._time = 0
         self.discard_vSDNs(all=True)
         self.simulation_timesteps = timesteps
 
-        if self._time == 0:
-            self.hypervisor_placement(**kwargs)
+        self.hypervisor_placement(**kwargs)
 
         for _ in range(self.simulation_timesteps):
             self.next_timestep(**kwargs)
             _ = self.log_simulation()
+        return
 
-    def run_optimal_dynamic_simulation(self, timesteps: int = 100, **kwargs):
+    def run_optimal_dynamic_simulation(self,
+                                       timesteps: int = 100,
+                                       **kwargs) -> None:
         self._time = 0
         self.discard_vSDNs(all=True)
         self.simulation_timesteps = timesteps
@@ -165,11 +166,16 @@ class NetworkSimulation:
             # print(f"Current: {current_placement}\nNew: {new_placement}")
             self.setup_vSDN_requests()
             _ = self.log_simulation()
+        self.save2pickle(
+            self._result_folder +
+            f"{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.p",
+            self.network_operator.vSDN_history)
+        return
 
     def run_multiple_dynamic_simulations(self,
                                          sim_repeat: int = 10,
                                          optimal: bool = False,
-                                         **kwargs):
+                                         **kwargs) -> None:
         self.delete_logs()
         for sim_id in range(sim_repeat):
             self.simulation_id = sim_id
@@ -182,7 +188,7 @@ class NetworkSimulation:
     def next_timestep(self,
                       to_setup: bool = True,
                       request_per_timestep: int = 10,
-                      **kwargs):
+                      **kwargs) -> None:
         self._time += 1
         self.discard_vSDNs()
 
@@ -227,7 +233,7 @@ class NetworkSimulation:
     def modify_hypervisor_placement(self, **kwargs) -> None:
         return
 
-    def generate_vSDN_requests(self, request_size: int, **kwargs):
+    def generate_vSDN_requests(self, request_size: int, **kwargs) -> None:
         self.vSDN_size = request_size
         (self.vSDN_requests, self.vSDN_coverage,
          self.vSDN_count) = self.request_generator.get_request_list(
@@ -238,7 +244,7 @@ class NetworkSimulation:
     def get_vSDN_requests_ilp(self,
                               vSDN_count_ilp: int = 100,
                               vSDN_size_ilp: int = None,
-                              **kwargs):
+                              **kwargs) -> List[vSDN_request.vSDN_request]:
         """Returns vSDN requests for the ILP.
         Generates new requests if a request list is not given."""
         if kwargs.get('vSDN_requests_ilp', None) is None:
@@ -408,3 +414,7 @@ class NetworkSimulation:
 
     def get_static_simulation_name(self):
         return f"L{int(100*self.network_operator.get_latency_factor())}_rsi{int(self.get_vSDN_max_size_ilp())}_rci{int(self.get_vSDN_count_ilp())}"
+
+    def save2pickle(self, path, obj):
+        with open(path, 'wb') as f:
+            pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)

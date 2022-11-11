@@ -11,7 +11,7 @@ import tqdm
 from src.models.network_simulation import NetworkSimulation
 from src.data.json_encoder import NumpyEncoder
 
-networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 14),
+networks = [('25_italy', 25), ('26_usa', 14), ('37_cost', 14),
             ('50_germany', 19)]
 network_name, max_vSDN_size = networks[0]
 hp_type = 'ilp'
@@ -22,7 +22,7 @@ TTL_range = 6
 
 possible_settings = {
     'network_name': [network_name],
-    'latency_factor': [0.4],
+    'latency_factor': [0.55],
     'shortest_k': [16],
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],

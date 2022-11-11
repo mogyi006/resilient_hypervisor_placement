@@ -4,6 +4,7 @@ import random
 import glob
 import re
 import linecache
+from typing import List
 
 # Related third party imports.
 import numpy as np
@@ -84,13 +85,15 @@ def generate_random_vSDN_requests(request_file_path_list,
 class vSDN_request(object):
     id_iter = itertools.count()
 
-    def __init__(self, controller, switches, TTL, time_, **kwargs):
+    def __init__(self, controller, switches, TTL, QoS, time_, **kwargs):
         self._id = next(vSDN_request.id_iter)
         self._controller = controller
         self._switches = switches
         self._TTL = TTL
         self._start_time = time_
         self._end_time = time_ + TTL
+        self._QoS = QoS
+        self._status = False
 
     def __repr__(self) -> str:
         return "%3s %3s %10s %3s" % (self._id, self._controller,
@@ -118,6 +121,12 @@ class vSDN_request(object):
     def set_controller(self, c):
         self._controller = c
 
+    def get_status(self):
+        return self._status
+
+    def set_status(self, new_status):
+        self._status = new_status
+
 
 class vSDN_request_generator:
     def __init__(self,
@@ -133,6 +142,12 @@ class vSDN_request_generator:
 
     def get_seed(self):
         return self.seed
+
+    def TTL_generator(self, min_TTL: int = 1, max_TTL: int = 10, **kwargs):
+        return self.random_generator.integers(min_TTL, max_TTL, 1)[0]
+
+    def QoS_generator(self, min_QoS: int = 1, max_QoS: int = 3, **kwargs):
+        return self.random_generator.integers(min_QoS, max_QoS, 1)[0]
 
     def get_request_file_path(self, request_size):
         return f"{self._request_folder}{self._network_name}.{str(request_size)}.subgraphs"
@@ -150,10 +165,7 @@ class vSDN_request_generator:
         # print(self.request_file_dict)
         return
 
-    def get_request_from_file(self,
-                              request_file_path,
-                              line_index,
-                              TTL_range: int = 10,
+    def get_request_from_file(self, request_file_path, line_index,
                               **kwargs) -> vSDN_request:
         switches = [
             int(s)
@@ -162,8 +174,13 @@ class vSDN_request_generator:
         # print(line_index, switches)
         controller = self.random_generator.choice(
             switches)  # ! controller selection
-        TTL = self.random_generator.integers(1, TTL_range, 1)[0]
-        return vSDN_request(controller, switches, TTL, **kwargs)
+        TTL = self.TTL_generator(**kwargs)
+        QoS = self.QoS_generator(**kwargs)
+        return vSDN_request(controller=controller,
+                            switches=switches,
+                            TTL=TTL,
+                            QoS=QoS,
+                            **kwargs)
 
     def get_request(self, request_size, **kwargs) -> vSDN_request:
         request_file_path = self.request_file_dict[request_size]['file_path']
@@ -176,7 +193,7 @@ class vSDN_request_generator:
                          request_size: int = 2,
                          coverage: float = None,
                          count: int = None,
-                         **kwargs):
+                         **kwargs) -> List[vSDN_request]:
         request_file_path = self.request_file_dict[request_size]['file_path']
         number_of_subgraphs = self.request_file_dict[request_size]['file_size']
         if coverage is not None and coverage <= 1 and coverage > 0:
@@ -199,7 +216,7 @@ class vSDN_request_generator:
     def get_random_vSDN_requests(self,
                                  max_request_size: int = None,
                                  total_count: int = 100,
-                                 **kwargs):
+                                 **kwargs) -> List[vSDN_request]:
         request_sizes = sorted([
             size for size in self.request_file_dict.keys()
             if size <= max_request_size
