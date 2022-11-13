@@ -280,16 +280,9 @@ class NetworkOperator:
                 continue
 
             if possible:
-                request.set_controller(c)
-                request.set_status(True)
-                self.vSDNs[request.id] = copy.deepcopy(request)
-                self.vSDN_control_paths[request.id] = {}
-                for s in request.get_switches():
-                    h, h_ = self.hypervisor_assignment[s]
-                    self.vSDN_control_paths[request.id][(
-                        c, s)] = routing.full_control_path(
-                            self.possible_paths, c, h, h_, s, self.max_length)
-                self.vSDN_history[request.id] = copy.deepcopy(request)
+                self.deploy_vSDN(request, c)
+            else:
+                self.not_deploy_vSDN(request)
 
         print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted
@@ -317,10 +310,29 @@ class NetworkOperator:
             self.cp_stats = {}
             return
 
-    def discard_vSDN(self, id) -> None:
+    def deploy_vSDN(self, request: vSDN_request, c: int) -> None:
+        request.set_controller(c)
+        request.set_status(True)
+        self.vSDNs[request.get_id()] = copy.deepcopy(request)
+        self.vSDN_control_paths[request.get_id()] = {}
+        for s in request.get_switches():
+            h, h_ = self.hypervisor_assignment[s]
+            self.vSDN_control_paths[request.get_id()][(
+                c, s)] = routing.full_control_path(self.possible_paths, c, h,
+                                                   h_, s, self.max_length)
+        self.vSDN_history[request.get_id()] = copy.deepcopy(request)
+        return
+
+    def not_deploy_vSDN(self, request: vSDN_request) -> None:
+        self.vSDN_history[request.get_id()] = copy.deepcopy(request)
+        return
+
+    def discard_vSDN(self, id, time) -> None:
         _ = self.vSDNs.pop(id, None)
         _ = self.vSDN_control_paths.pop(id, None)
         _ = self.cp_stats.pop(id, None)
+
+        self.vSDN_history[id].set_end_time(time)
         return
 
     def discard_all_vSDNs(self) -> None:
@@ -329,11 +341,11 @@ class NetworkOperator:
         self.cp_stats = {}
         return
 
-    def discard_old_vSDNs(self, _time) -> None:
+    def discard_old_vSDNs(self, time) -> None:
         for id, vSDN in list(self.vSDNs.items()):
-            if vSDN.get_end_time() <= _time:
-                self.discard_vSDN(id)
+            if vSDN.get_end_time() <= time:
+                self.discard_vSDN(id, time)
         return
 
     def get_active_controllers(self) -> list:
-        return [vSDN._controller for _, vSDN in self.vSDNs.items()]
+        return [vSDN.get_controller() for _, vSDN in self.vSDNs.items()]

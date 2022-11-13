@@ -4,7 +4,8 @@ import random
 import glob
 import re
 import linecache
-from typing import List
+import typing
+from typing import List, Tuple
 
 # Related third party imports.
 import numpy as np
@@ -12,13 +13,13 @@ import numpy as np
 # Local application/library specific imports.
 
 
-def generate_vSDN_request(request_file_path, TTL_range, time_):
-    with open(request_file_path, mode='r') as f:
-        subgraphs = f.readlines()
-        switches = [int(s) for s in random.choice(subgraphs).split()]
-        controller = random.choice(switches)
-        TTL = random.randint(1, TTL_range)
-        return vSDN_request(controller, switches, TTL, time_)
+# def generate_vSDN_request(request_file_path, TTL_range, time_):
+#     with open(request_file_path, mode='r') as f:
+#         subgraphs = f.readlines()
+#         switches = [int(s) for s in random.choice(subgraphs).split()]
+#         controller = random.choice(switches)
+#         TTL = random.randint(1, TTL_range)
+#         return vSDN_request(controller, switches, TTL, time_)
 
 
 # def generate_vSDN_requests(request_file_path,
@@ -31,55 +32,55 @@ def generate_vSDN_request(request_file_path, TTL_range, time_):
 #     ]
 
 
-def generate_vSDN_requests(request_file_path,
-                           coverage: float = None,
-                           count: int = None,
-                           TTL_range: int = 10,
-                           time_: int = 0,
-                           **kwargs):
-    with open(request_file_path, mode='r') as f:
-        subgraphs = f.readlines()
-        number_of_subgraphs = len(subgraphs)
-        subgraph_switches = [[int(s) for s in subgraph.split()]
-                             for subgraph in subgraphs]
+# def generate_vSDN_requests(request_file_path,
+#                            coverage: float = None,
+#                            count: int = None,
+#                            TTL_range: int = 10,
+#                            time_: int = 0,
+#                            **kwargs):
+#     with open(request_file_path, mode='r') as f:
+#         subgraphs = f.readlines()
+#         number_of_subgraphs = len(subgraphs)
+#         subgraph_switches = [[int(s) for s in subgraph.split()]
+#                              for subgraph in subgraphs]
 
-        if coverage and coverage <= 1 and coverage > 0:
-            number_of_requests = int(coverage * number_of_subgraphs)
-        elif count and count > 1:
-            number_of_requests = min(number_of_subgraphs, count)
-            coverage = number_of_requests / number_of_subgraphs
-        else:
-            return None
-        return ([
-            vSDN_request(controller=random.choice(switches),
-                         switches=switches,
-                         TTL=random.randint(1, TTL_range),
-                         time_=time_) for switches in random.sample(
-                             subgraph_switches, number_of_requests)
-        ], coverage, number_of_requests)
+#         if coverage and coverage <= 1 and coverage > 0:
+#             number_of_requests = int(coverage * number_of_subgraphs)
+#         elif count and count > 1:
+#             number_of_requests = min(number_of_subgraphs, count)
+#             coverage = number_of_requests / number_of_subgraphs
+#         else:
+#             return None
+#         return ([
+#             vSDN_request(controller=random.choice(switches),
+#                          switches=switches,
+#                          TTL=random.randint(1, TTL_range),
+#                          time_=time_) for switches in random.sample(
+#                              subgraph_switches, number_of_requests)
+#         ], coverage, number_of_requests)
 
 
-def generate_random_vSDN_requests(request_file_path_list,
-                                  total_count: int = 100,
-                                  **kwargs):
-    request_list = []
-    request_file_count = len(request_file_path_list)
-    remaining_count = total_count
-    for i, request_file_path in enumerate(request_file_path_list):
-        if remaining_count <= 0:
-            continue
-        if i == request_file_count - 1:
-            sub_count = remaining_count
-        else:
-            sub_counts = np.random.multinomial(remaining_count,
-                                               [1 / (request_file_count - i)] *
-                                               (request_file_count - i))
-            sub_count = min(remaining_count, sub_counts[0])
-        sub_request_list, _, sub_count = generate_vSDN_requests(
-            request_file_path, count=sub_count, **kwargs)
-        request_list.extend(sub_request_list)
-        remaining_count -= sub_count
-    return request_list
+# def generate_random_vSDN_requests(request_file_path_list,
+#                                   total_count: int = 100,
+#                                   **kwargs):
+#     request_list = []
+#     request_file_count = len(request_file_path_list)
+#     remaining_count = total_count
+#     for i, request_file_path in enumerate(request_file_path_list):
+#         if remaining_count <= 0:
+#             continue
+#         if i == request_file_count - 1:
+#             sub_count = remaining_count
+#         else:
+#             sub_counts = np.random.multinomial(remaining_count,
+#                                                [1 / (request_file_count - i)] *
+#                                                (request_file_count - i))
+#             sub_count = min(remaining_count, sub_counts[0])
+#         sub_request_list, _, sub_count = generate_vSDN_requests(
+#             request_file_path, count=sub_count, **kwargs)
+#         request_list.extend(sub_request_list)
+#         remaining_count -= sub_count
+#     return request_list
 
 
 class vSDN_request(object):
@@ -108,6 +109,9 @@ class vSDN_request(object):
 
     def get_start_time(self):
         return self.start_time
+
+    def set_end_time(self, t):
+        self.end_time = t
 
     def get_end_time(self):
         return self.end_time
@@ -196,7 +200,7 @@ class vSDN_request_generator:
                          request_size: int = 2,
                          coverage: float = None,
                          count: int = None,
-                         **kwargs) -> List[vSDN_request]:
+                         **kwargs) -> Tuple[List[vSDN_request], float, int]:
         request_file_path = self.request_file_dict[request_size]['file_path']
         number_of_subgraphs = self.request_file_dict[request_size]['file_size']
         if coverage is not None and coverage <= 1 and coverage > 0:
@@ -217,7 +221,7 @@ class vSDN_request_generator:
         ], coverage, number_of_requests
 
     def get_random_vSDN_requests(self,
-                                 max_request_size: int = None,
+                                 max_request_size: typing.Optional[int] = None,
                                  total_count: int = 100,
                                  **kwargs) -> List[vSDN_request]:
         request_sizes = sorted([
