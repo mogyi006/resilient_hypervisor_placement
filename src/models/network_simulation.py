@@ -146,7 +146,8 @@ class NetworkSimulation:
                                      **kwargs) -> None:
         """
         t=0 Hypervisor placement.
-        t>0 Requests are arriving, reject if not acceptable.
+        t>0 Requests are arriving, reject new if not acceptable.
+            No Reconfiguration!
         """
         self._time = 0
         self.discard_vSDNs(all=True)
@@ -159,19 +160,76 @@ class NetworkSimulation:
             _ = self.log_simulation()
         return
 
-    def run_optimal_dynamic_simulation(self,
-                                       timesteps: int = 100,
-                                       **kwargs) -> None:
+    def run_conservative_dynamic_simulation(self,
+                                            timesteps: int = 100,
+                                            **kwargs) -> None:
+        """
+        t=0 -
+        t>0 Requests are arriving
+            Reconfiguration if not all new requests are acceptable.
+            Deployed vSDNs operate until TTL.
+        """
         self._time = 0
         self.discard_vSDNs(all=True)
         self.simulation_timesteps = timesteps
 
         for _ in range(self.simulation_timesteps):
             self.next_timestep(to_setup=False, **kwargs)
-            all_acceptable = (np.sum(self.preprocess_vSDN_requests()) ==
-                              self.get_vSDN_request_count())
+
+            all_acceptable = (self._time > 1) and (np.sum(
+                self.preprocess_vSDN_requests()) == self.
+                                                   get_vSDN_request_count())
             current_placement = set(
                 self.network_operator.get_active_hypervisors())
+
+            if not all_acceptable:
+                self.hypervisor_placement(
+                    **{
+                        'hp_type':
+                        'ilp',
+                        'hp_objective':
+                        'acceptance ratio',
+                        'vSDN_requests_ilp':
+                        self.vSDN_requests +
+                        list(self.network_operator.vSDNs.values()),
+                        'required_vSDN_requests':
+                        list(self.network_operator.vSDNs.keys()),
+                        'h_count':
+                        self.get_minimal_hypervisor_count(),
+                    })
+
+            new_placement = set(self.network_operator.get_active_hypervisors())
+            self.hp_changed = len(new_placement - current_placement)
+            # print(f"Current: {current_placement}\nNew: {new_placement}")
+            self.setup_vSDN_requests()
+            _ = self.log_simulation()
+
+        self.save_vSDN_history()
+        return
+
+    def run_liberal_dynamic_simulation(self,
+                                       timesteps: int = 100,
+                                       **kwargs) -> None:
+        """
+        t=0 -
+        t>0 Requests are arriving
+            Reconfiguration to maximize the number of active vSDNs.
+            Deployed vSDNs may be removed if necessary.
+        """
+        self._time = 0
+        self.discard_vSDNs(all=True)
+        self.simulation_timesteps = timesteps
+
+        for _ in range(self.simulation_timesteps):
+            self.next_timestep(to_setup=False, **kwargs)
+            self.vSDN_requests += list(self.network_operator.vSDNs.values())
+
+            all_acceptable = (self._time > 1) and (np.sum(
+                self.preprocess_vSDN_requests()) == self.
+                                                   get_vSDN_request_count())
+            current_placement = set(
+                self.network_operator.get_active_hypervisors())
+
             if not all_acceptable:
                 self.hypervisor_placement(
                     **{
@@ -180,15 +238,14 @@ class NetworkSimulation:
                         'vSDN_requests_ilp': self.vSDN_requests,
                         'h_count': self.get_minimal_hypervisor_count(),
                     })
+
             new_placement = set(self.network_operator.get_active_hypervisors())
             self.hp_changed = len(new_placement - current_placement)
             # print(f"Current: {current_placement}\nNew: {new_placement}")
-            self.setup_vSDN_requests()
+            self.setup_vSDN_requests(process_deployed=True, time=self._time)
             _ = self.log_simulation()
-        self.save2pickle(
-            self._result_folder +
-            f"{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.p",
-            self.network_operator.vSDN_history)
+
+        self.save_vSDN_history()
         return
 
     def run_multiple_dynamic_simulations(self,
@@ -202,10 +259,12 @@ class NetworkSimulation:
 
         for sim_id in range(sim_repeat):
             self.simulation_id = sim_id
-            if dynamic_type == 'optimal':
-                self.run_optimal_dynamic_simulation(**kwargs)
-            elif dynamic_type == 'basic':
+            if dynamic_type == 'basic':
                 self.run_basic_dynamic_simulation(**kwargs)
+            elif dynamic_type == 'conservative':
+                self.run_conservative_dynamic_simulation(**kwargs)
+            elif dynamic_type == 'liberal':
+                self.run_liberal_dynamic_simulation(**kwargs)
             else:
                 pass
         return
@@ -251,9 +310,10 @@ class NetworkSimulation:
     def get_minimal_hypervisor_count(self, recalculate: bool = False) -> int:
         if recalculate:
             return self.network_operator.get_minimal_hypervisor_count()
+        elif hasattr(self, 'min_h_count'):
+            return getattr(self, 'min_h_count')
         else:
-            return getattr(self, 'min_h_count',
-                           self.get_minimal_hypervisor_count(recalculate=True))
+            return self.network_operator.get_minimal_hypervisor_count()
 
     def modify_hypervisor_placement(self, **kwargs) -> None:
         return
@@ -289,7 +349,7 @@ class NetworkSimulation:
     @measure
     def setup_vSDN_requests(self, **kwargs) -> None:
         self.accepted_vSDN_requests = self.network_operator.process_vSDN_requests(
-            request_list=self.vSDN_requests)
+            request_list=self.vSDN_requests, **kwargs)
         self.vSDN_accepted_count = sum(self.accepted_vSDN_requests)
         _ = self.network_operator.get_control_path_stats()
         # print(latency_factor, max_length, request_size,
@@ -458,3 +518,10 @@ class NetworkSimulation:
     def save2pickle(self, path, obj):
         with open(path, 'wb') as f:
             pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+    def save_vSDN_history(self):
+        self.save2pickle(
+            self._result_folder +
+            f"{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.p",
+            self.network_operator.vSDN_history)
+        self.network_operator.vSDN_history = {}

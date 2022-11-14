@@ -83,7 +83,11 @@ def lcrhpp_minh(network_operator=None, **kwargs):
         print('Encountered an attribute error')
 
 
-def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
+def lcrhpp_maxa(network_operator,
+                vSDN_requests,
+                h_count,
+                required_vSDN_requests=None,
+                **kwargs):
     # print("Start LC RHPP max A")
     S = list(network_operator.nodes)
     H = list(network_operator.possible_hypervisors)
@@ -96,7 +100,7 @@ def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
     CR_pairs = list(itertools.product(C, R.keys()))
 
     allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
-    )
+        get_all=True)
     allowed_cs_H_pairs = network_operator.quartets_by_cs
     try:
         model = gp.Model("ilp max a ratio")
@@ -159,7 +163,13 @@ def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
         c_8 = model.addConstrs(controllable_request[r] == gp.or_(
             [controller_controls_request[(c, r)] for c in C]) for r in R)
 
-        c_9 = model.addConstr(gp.quicksum(active_hypervisors) <= h_count)
+        # Some requests must be accepted
+        if required_vSDN_requests is not None:
+            c_9 = model.addConstrs(controllable_request[r] == 1 for r in R
+                                   if r in required_vSDN_requests)
+
+        # The number of active hypervisors cannot exceed the given hypervisor count
+        c_10 = model.addConstr(gp.quicksum(active_hypervisors) <= h_count)
 
         # Maximize the acceptance ratio
         model.setObjective(
@@ -179,7 +189,10 @@ def lcrhpp_maxa(network_operator, vSDN_requests, h_count, **kwargs):
             },
             'hypervisor2switch control paths': [],
             'hp acceptance ratio':
-            model.ObjVal
+            model.ObjVal,
+            'request status':
+            {id_: v.x > 0.9
+             for id_, v in controllable_request.items()}
         }
         # print(result['active hypervisors'])
         # print(result['hypervisor assignment'])

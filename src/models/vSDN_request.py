@@ -12,7 +12,6 @@ import numpy as np
 
 # Local application/library specific imports.
 
-
 # def generate_vSDN_request(request_file_path, TTL_range, time_):
 #     with open(request_file_path, mode='r') as f:
 #         subgraphs = f.readlines()
@@ -20,7 +19,6 @@ import numpy as np
 #         controller = random.choice(switches)
 #         TTL = random.randint(1, TTL_range)
 #         return vSDN_request(controller, switches, TTL, time_)
-
 
 # def generate_vSDN_requests(request_file_path,
 #                            number_of_requests,
@@ -30,7 +28,6 @@ import numpy as np
 #         generate_vSDN_request(request_file_path, TTL_range, time_)
 #         for _ in range(number_of_requests)
 #     ]
-
 
 # def generate_vSDN_requests(request_file_path,
 #                            coverage: float = None,
@@ -58,7 +55,6 @@ import numpy as np
 #                          time_=time_) for switches in random.sample(
 #                              subgraph_switches, number_of_requests)
 #         ], coverage, number_of_requests)
-
 
 # def generate_random_vSDN_requests(request_file_path_list,
 #                                   total_count: int = 100,
@@ -179,8 +175,8 @@ class vSDN_request_generator:
             for s in linecache.getline(request_file_path, line_index).split()
         ]
         # print(line_index, switches)
-        controller = self.random_generator.choice(
-            switches)  # ! controller selection
+        controller = None
+        # self.random_generator.choice(switches)  # ! controller selection
         TTL = self.TTL_generator(**kwargs)
         QoS = self.QoS_generator(**kwargs)
         return vSDN_request(controller=controller,

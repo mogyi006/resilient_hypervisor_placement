@@ -126,13 +126,13 @@ class NetworkOperator:
              max_length=self.max_length)
         return None
 
-    def get_allowed_hypervisor_pairs_by_switch(self):
+    def get_allowed_hypervisor_pairs_by_switch(self, get_all: bool = False):
         """Return the hypervisor pairs that enable control paths
         with the current latency requirement."""
         _, active_controllers_by_switch = self.get_active_CS_pairs()
         allowed_hypervisor_pairs_by_switch = {}
         for s, triplets in self.triplets_by_switches.items():
-            if s in active_controllers_by_switch.keys():
+            if s in active_controllers_by_switch.keys() and not get_all:
                 for i, c in enumerate(active_controllers_by_switch[s]):
                     if i == 0:
                         allowed_hypervisor_pairs_by_switch[
@@ -193,6 +193,9 @@ class NetworkOperator:
                 Smc=result.get('S_controllable', []),
                 all_paths=self.possible_paths,
                 **kwargs)
+
+        if 'request status' in result:
+            print(result.get('request status'))
         return None
 
     def get_minimal_hypervisor_count(self, **kwargs) -> int:
@@ -231,8 +234,11 @@ class NetworkOperator:
             else:
                 possible_controllers_ &= possible_controllers_for_switch
         if possible_controllers_:
-            return random.choice(
-                list(possible_controllers_))  # ! controller selection
+            if request.get_controller() in possible_controllers_:
+                return request.get_controller()
+            else:
+                return random.choice(
+                    list(possible_controllers_))  # ! controller selection
         else:
             return None
 
@@ -242,24 +248,19 @@ class NetworkOperator:
 
     def process_vSDN_requests(self,
                               request_list: List[vSDN_request.vSDN_request],
-                              to_process: bool = True,
-                              deploy: bool = True) -> List[bool]:
+                              process_deployed: bool = True,
+                              deploy: bool = True,
+                              time: int = 0) -> List[bool]:
 
         if 'vSDN_history' not in dir(self):
             self.vSDN_history = {}
 
         accepted = [False] * len(request_list)
 
-        if not to_process:
-            print("No request processing...")
-            return accepted
-
         for i, request in enumerate(request_list):
-            self.vSDN_history[request.id] = copy.deepcopy(request)
+            self.vSDN_history.setdefault(request.id, copy.deepcopy(request))
             #print(request)
-            # if request._controller not in self.possible_controllers:
-            #     print("Invalid request:", "Wrong controller - ", request._controller)
-            #     continue
+
             if not (set(request.get_switches()) <= set(self.nodes)):
                 print("Invalid request:", "Wrong switches - ",
                       request.get_switches())
@@ -291,7 +292,8 @@ class NetworkOperator:
             if possible:
                 self.deploy_vSDN(request, c)
             else:
-                self.not_deploy_vSDN(request)
+                if request.get_id() in self.vSDNs:
+                    self.discard_vSDN(request.get_id(), time)
 
         print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted

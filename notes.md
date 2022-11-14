@@ -1,8 +1,8 @@
 # Dynamic behaviour
-- Simple: HP beforehand, reject if not acceptable
+- Basic: HP beforehand, reject if not acceptable
 - Continuous: Reconfiguration at each step
-    - Respect current vSDNs
-    - Maximize A current+new
+    - Conservative: Respect current vSDNs
+    - Liberal: Maximize A current+new
     - Maximize other metrics like utilization
 - Periodic: Reconfiguration at given times or at low acceptance
 
