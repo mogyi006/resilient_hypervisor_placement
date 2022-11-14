@@ -80,41 +80,55 @@ class NetworkSimulation:
         return
 
     def run_static_simulation(self,
-                              hp_repeat: int = 1,
                               possible_request_settings: dict = None,
                               **kwargs) -> None:
-        self.delete_logs()
+        self.discard_vSDNs(all=True)
         request_setting_list = generate_setting_list(possible_request_settings)
 
-        for _ in range(hp_repeat):
-            self.hypervisor_placement(**kwargs)
-            for request_setting in request_setting_list:
-                self.run_static_request_simulation(**request_setting)
-                _ = self.log_simulation()
+        self.hypervisor_placement(**kwargs)
+        for request_setting in request_setting_list:
+            self.run_static_request_simulation(**request_setting)
+            _ = self.log_simulation()
+
         return
 
     def run_optimal_static_simulation(self,
-                                      hp_repeat: int = 1,
                                       possible_request_settings: dict = None,
                                       **kwargs) -> None:
-        self.delete_logs()
+        self.discard_vSDNs(all=True)
         request_setting_list = generate_setting_list(possible_request_settings)
 
-        for _ in range(hp_repeat):
-            for request_setting in request_setting_list:
-                self.run_static_request_simulation(to_setup=False,
-                                                   **request_setting)
-                self.hypervisor_placement(
-                    **{
-                        'hp_type': 'ilp',
-                        'hp_objective': 'acceptance ratio',
-                        'vSDN_requests_ilp': self.vSDN_requests,
-                        'h_count': self.get_minimal_hypervisor_count(),
-                    })
+        for request_setting in request_setting_list:
+            self.run_static_request_simulation(to_setup=False,
+                                               **request_setting)
+            self.hypervisor_placement(
+                **{
+                    'hp_type': 'ilp',
+                    'hp_objective': 'acceptance ratio',
+                    'vSDN_requests_ilp': self.vSDN_requests,
+                    'h_count': self.get_minimal_hypervisor_count(),
+                })
 
-                _, self.request_processing_time = self.setup_vSDN_requests(
-                    **kwargs)
-                _ = self.log_simulation()
+            _, self.request_processing_time = self.setup_vSDN_requests(
+                **kwargs)
+            _ = self.log_simulation()
+        return
+
+    def run_multiple_static_simulation(self,
+                                       sim_repeat: int = 10,
+                                       static_type: str = 'basic',
+                                       **kwargs) -> None:
+        self.delete_logs()
+        self.simulation_type = 'static'
+        self.sim_static_type = static_type
+        self.min_h_count = self.get_minimal_hypervisor_count(recalculate=True)
+
+        for sim_id in range(sim_repeat):
+            self.simulation_id = sim_id
+            if static_type == 'opt':
+                self.run_optimal_static_simulation(**kwargs)
+            else:
+                self.run_static_simulation(**kwargs)
         return
 
     def run_static_request_simulation(self,
@@ -127,7 +141,13 @@ class NetworkSimulation:
                 **kwargs)
         return
 
-    def run_dynamic_simulation(self, timesteps: int = 100, **kwargs) -> None:
+    def run_basic_dynamic_simulation(self,
+                                     timesteps: int = 100,
+                                     **kwargs) -> None:
+        """
+        t=0 Hypervisor placement.
+        t>0 Requests are arriving, reject if not acceptable.
+        """
         self._time = 0
         self.discard_vSDNs(all=True)
         self.simulation_timesteps = timesteps
@@ -145,7 +165,6 @@ class NetworkSimulation:
         self._time = 0
         self.discard_vSDNs(all=True)
         self.simulation_timesteps = timesteps
-        min_h_count = self.get_minimal_hypervisor_count()
 
         for _ in range(self.simulation_timesteps):
             self.next_timestep(to_setup=False, **kwargs)
@@ -159,7 +178,7 @@ class NetworkSimulation:
                         'hp_type': 'ilp',
                         'hp_objective': 'acceptance ratio',
                         'vSDN_requests_ilp': self.vSDN_requests,
-                        'h_count': min_h_count,
+                        'h_count': self.get_minimal_hypervisor_count(),
                     })
             new_placement = set(self.network_operator.get_active_hypervisors())
             self.hp_changed = len(new_placement - current_placement)
@@ -174,15 +193,21 @@ class NetworkSimulation:
 
     def run_multiple_dynamic_simulations(self,
                                          sim_repeat: int = 10,
-                                         optimal: bool = False,
+                                         dynamic_type: str = 'basic',
                                          **kwargs) -> None:
         self.delete_logs()
+        self.simulation_type = 'dynamic'
+        self.sim_dynamic_type = dynamic_type
+        self.min_h_count = self.get_minimal_hypervisor_count(recalculate=True)
+
         for sim_id in range(sim_repeat):
             self.simulation_id = sim_id
-            if optimal:
+            if dynamic_type == 'optimal':
                 self.run_optimal_dynamic_simulation(**kwargs)
+            elif dynamic_type == 'basic':
+                self.run_basic_dynamic_simulation(**kwargs)
             else:
-                self.run_dynamic_simulation(**kwargs)
+                pass
         return
 
     def next_timestep(self,
@@ -223,12 +248,12 @@ class NetworkSimulation:
         # _, _ = self.network_operator.get_hypervisor_switch_latencies()
         return
 
-    def get_minimal_hypervisor_count(self) -> int:
-        self.hypervisor_placement(**{
-            'hp_type': 'ilp',
-            'hp_objective': 'hypervisor count',
-        })
-        return self.network_operator.get_active_hypervisor_count()
+    def get_minimal_hypervisor_count(self, recalculate: bool = False) -> int:
+        if recalculate:
+            return self.network_operator.get_minimal_hypervisor_count()
+        else:
+            return getattr(self, 'min_h_count',
+                           self.get_minimal_hypervisor_count(recalculate=True))
 
     def modify_hypervisor_placement(self, **kwargs) -> None:
         return
@@ -281,6 +306,18 @@ class NetworkSimulation:
 
     def log_simulation(self):
         log = {
+            'simulation_id':
+            self.simulation_id,
+            'dynamic_simulation_name':
+            self.get_dynamic_simulation_name(),
+            'static_simulation_name':
+            self.get_static_simulation_name(),
+            'simulation_type':
+            self.get_simulation_type(),
+            'sim_static_type':
+            self.get_sim_static_type(),
+            'sim_dynamic_type':
+            self.get_sim_dynamic_type(),
             'network':
             self._network_name,
             'diameter':
@@ -351,12 +388,6 @@ class NetworkSimulation:
             self.network_operator.get_chs_cp_stat('max_b'),
             'timestep':
             self._time,
-            'simulation_id':
-            self.simulation_id,
-            'dynamic_simulation_name':
-            self.get_dynamic_simulation_name(),
-            'static_simulation_name':
-            self.get_static_simulation_name()
         }
         # pprint.pprint(log)
         self.logs.append(log)
@@ -414,6 +445,15 @@ class NetworkSimulation:
 
     def get_static_simulation_name(self):
         return f"L{int(100*self.network_operator.get_latency_factor())}_rsi{int(self.get_vSDN_max_size_ilp())}_rci{int(self.get_vSDN_count_ilp())}"
+
+    def get_simulation_type(self):
+        return getattr(self, 'simulation_type', '')
+
+    def get_sim_static_type(self):
+        return getattr(self, 'sim_static_type', '')
+
+    def get_sim_dynamic_type(self):
+        return getattr(self, 'sim_dynamic_type', '')
 
     def save2pickle(self, path, obj):
         with open(path, 'wb') as f:

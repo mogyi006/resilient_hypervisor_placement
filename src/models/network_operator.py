@@ -12,7 +12,7 @@ from src.logger import measure
 
 import src.data.routing as routing
 import src.data.graph_utilities as gu
-from src.models.hypervisor_placement import hypervison_placement_solutions
+from src.models.hypervisor_placement import hypervisor_placement_solutions
 from src.models import vSDN_request
 
 
@@ -170,7 +170,7 @@ class NetworkOperator:
         self.hp_type = kwargs.get('hp_type')
         self.hp_objective = kwargs.get('hp_objective')
         self.hp_greedy_repeat = kwargs.get('repeat')
-        result, self.hp_runtime = hypervison_placement_solutions(**dict(
+        result, self.hp_runtime = hypervisor_placement_solutions(**dict(
             kwargs,
             network_operator=self,
         ))
@@ -194,6 +194,15 @@ class NetworkOperator:
                 all_paths=self.possible_paths,
                 **kwargs)
         return None
+
+    def get_minimal_hypervisor_count(self, **kwargs) -> int:
+        result, self.hp_runtime = hypervisor_placement_solutions(
+            **{
+                'hp_type': 'ilp',
+                'hp_objective': 'hypervisor count',
+                'network_operator': self
+            })
+        return len(result.get('active hypervisors', None))
 
     def get_hypervisor_switch_latencies(self):
         primary_paths, secondary_paths = [], []

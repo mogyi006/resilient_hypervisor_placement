@@ -271,7 +271,7 @@ def hp_overall_coverage(network_operator=None,
 
 
 @measure
-def hypervison_placement_solutions(hp_type: str = 'heuristics',
+def hypervisor_placement_solutions(hp_type: str = 'heuristics',
                                    hp_objective: str = 'hypervisor count',
                                    **kwargs):
     if hp_type == 'heuristics':
