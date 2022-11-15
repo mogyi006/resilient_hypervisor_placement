@@ -248,9 +248,9 @@ class NetworkOperator:
 
     def process_vSDN_requests(self,
                               request_list: List[vSDN_request.vSDN_request],
-                              process_deployed: bool = True,
                               deploy: bool = True,
-                              time: int = 0) -> List[bool]:
+                              time: int = 0,
+                              **kwargs) -> List[bool]:
 
         if 'vSDN_history' not in dir(self):
             self.vSDN_history = {}
@@ -267,22 +267,15 @@ class NetworkOperator:
                 continue
 
             c = self.find_controller_for_request(request)
-            if c is None:
-                # print("Invalid request:", "No controller")
-                continue
-
-            possible = True
-            for s in request.get_switches():
-                h, h_ = self.hypervisor_assignment[s]
-                if (((c, h, h_, s) in self.quartets_by_controllers[c])
-                        or ((c, h_, h, s) in self.quartets_by_controllers[c])):
-                    continue
-                else:
-                    # print(f"No path-disjoint control path")
-                    #print(c,h,h_,s)
-                    #print(self.quartets_by_controllers[c])
-                    possible = False
-                    break
+            possible = c is not None
+            if possible:
+                for s in request.get_switches():
+                    h, h_ = self.hypervisor_assignment[s]
+                    if not (
+                        ((c, h, h_, s) in self.quartets_by_controllers[c]) or
+                        ((c, h_, h, s) in self.quartets_by_controllers[c])):
+                        possible = False
+                        break
 
             accepted[i] = possible
 

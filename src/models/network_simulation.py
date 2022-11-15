@@ -242,7 +242,7 @@ class NetworkSimulation:
             new_placement = set(self.network_operator.get_active_hypervisors())
             self.hp_changed = len(new_placement - current_placement)
             # print(f"Current: {current_placement}\nNew: {new_placement}")
-            self.setup_vSDN_requests(process_deployed=True, time=self._time)
+            self.setup_vSDN_requests(time=self._time)
             _ = self.log_simulation()
 
         self.save_vSDN_history()
@@ -501,7 +501,8 @@ class NetworkSimulation:
         return getattr(self, 'vSDN_count_ilp', 0)
 
     def get_dynamic_simulation_name(self):
-        return f"L{int(100*self.network_operator.get_latency_factor())}_mrs{self.get_max_vSDN_size()}_rpt{self.get_vSDN_request_count()}_ttl{self.get_TTL_max()}"
+        return f"L{int(100*self.network_operator.get_latency_factor())}"
+        # _mrs{self.get_max_vSDN_size()}_rpt{self.get_vSDN_request_count()}_ttl{self.get_TTL_max()}
 
     def get_static_simulation_name(self):
         return f"L{int(100*self.network_operator.get_latency_factor())}_rsi{int(self.get_vSDN_max_size_ilp())}_rci{int(self.get_vSDN_count_ilp())}"
@@ -521,7 +522,7 @@ class NetworkSimulation:
 
     def save_vSDN_history(self):
         self.save2pickle(
-            self._result_folder +
+            self._result_folder + 'dynamic/' +
             f"{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.p",
             self.network_operator.vSDN_history)
         self.network_operator.vSDN_history = {}
