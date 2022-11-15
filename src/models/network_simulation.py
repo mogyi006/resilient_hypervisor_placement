@@ -1,4 +1,5 @@
 # Standard library imports.
+import os
 import datetime
 import pickle
 import pprint
@@ -27,23 +28,32 @@ def generate_setting_list(setting_dict: dict = None) -> list:
 
 class NetworkSimulation:
     def __init__(self, network_name: str = None, **kwargs) -> None:
+        self.simulation_id = datetime.datetime.now().strftime(
+            '%Y-%m-%d-%H-%M-%S')
+        self.simulation_round = 0
         self._time = 0
-        self.simulation_id = 0
 
         self._network_name = network_name
         self._network_path = f"../data/processed/networks/{self._network_name}.gml"
         self._request_folder = f"../data/processed/requests/{self._network_name}/"
-        self._result_folder = f"../results/{self._network_name}/"
         self._network_operator_folder = f"../data/processed/network_operators/{self._network_name}/"
+        self._result_folder = kwargs.get(
+            'simulation_group_folder',
+            f"../results/{self._network_name}/") + self.simulation_id + '/'
+        if not os.path.isdir(self._result_folder):
+            os.mkdir(self._result_folder)
 
         self.init_network_operator(**kwargs)
 
-        self.request_generator = vSDN_request.vSDN_request_generator(
+        self.request_generator_static = vSDN_request.vSDN_request_generator(
             self._network_name, self._request_folder, **kwargs)
-        self.request_generator_ = vSDN_request.vSDN_request_generator(
+        self.request_generator_dynamic = vSDN_request.vSDN_request_generator(
+            self._network_name, self._request_folder, **kwargs)
+        self.request_generator_representative = vSDN_request.vSDN_request_generator(
             self._network_name, self._request_folder, **kwargs)
 
         self.logs = []
+        self.vSDN_history = {}
         return
 
     def get_network_operator_path(self, latency_factor, shortest_k, **kwargs):
@@ -82,7 +92,7 @@ class NetworkSimulation:
     def run_static_simulation(self,
                               possible_request_settings: dict = None,
                               **kwargs) -> None:
-        self.discard_vSDNs(all=True)
+        self.delete_all_vSDNs()
         request_setting_list = generate_setting_list(possible_request_settings)
 
         self.hypervisor_placement(**kwargs)
@@ -95,7 +105,7 @@ class NetworkSimulation:
     def run_optimal_static_simulation(self,
                                       possible_request_settings: dict = None,
                                       **kwargs) -> None:
-        self.discard_vSDNs(all=True)
+        self.delete_all_vSDNs()
         request_setting_list = generate_setting_list(possible_request_settings)
 
         for request_setting in request_setting_list:
@@ -124,7 +134,7 @@ class NetworkSimulation:
         self.min_h_count = self.get_minimal_hypervisor_count(recalculate=True)
 
         for sim_id in range(sim_repeat):
-            self.simulation_id = sim_id
+            self.simulation_round = sim_id
             if static_type == 'opt':
                 self.run_optimal_static_simulation(**kwargs)
             else:
@@ -134,7 +144,7 @@ class NetworkSimulation:
     def run_static_request_simulation(self,
                                       to_setup: bool = True,
                                       **kwargs) -> None:
-        self.discard_vSDNs(all=True)
+        self.delete_all_vSDNs()
         self.generate_vSDN_requests(**kwargs)
         if to_setup:
             _, self.request_processing_time = self.setup_vSDN_requests(
@@ -150,7 +160,7 @@ class NetworkSimulation:
             No Reconfiguration!
         """
         self._time = 0
-        self.discard_vSDNs(all=True)
+        self.delete_all_vSDNs()
         self.simulation_timesteps = timesteps
 
         self.hypervisor_placement(**kwargs)
@@ -158,6 +168,8 @@ class NetworkSimulation:
         for _ in range(self.simulation_timesteps):
             self.next_timestep(**kwargs)
             _ = self.log_simulation()
+
+        self.deactivate_vSDNs(all=True)
         return
 
     def run_conservative_dynamic_simulation(self,
@@ -170,7 +182,7 @@ class NetworkSimulation:
             Deployed vSDNs operate until TTL.
         """
         self._time = 0
-        self.discard_vSDNs(all=True)
+        self.delete_all_vSDNs()
         self.simulation_timesteps = timesteps
 
         for _ in range(self.simulation_timesteps):
@@ -191,9 +203,9 @@ class NetworkSimulation:
                         'acceptance ratio',
                         'vSDN_requests_ilp':
                         self.vSDN_requests +
-                        list(self.network_operator.vSDNs.values()),
+                        self.network_operator.get_active_vSDNs(),
                         'required_vSDN_requests':
-                        list(self.network_operator.vSDNs.keys()),
+                        self.network_operator.get_active_vSDNs(only_ids=True),
                         'h_count':
                         self.get_minimal_hypervisor_count(),
                     })
@@ -204,7 +216,7 @@ class NetworkSimulation:
             self.setup_vSDN_requests()
             _ = self.log_simulation()
 
-        self.save_vSDN_history()
+        self.deactivate_vSDNs(all=True)
         return
 
     def run_liberal_dynamic_simulation(self,
@@ -217,12 +229,12 @@ class NetworkSimulation:
             Deployed vSDNs may be removed if necessary.
         """
         self._time = 0
-        self.discard_vSDNs(all=True)
+        self.delete_all_vSDNs()
         self.simulation_timesteps = timesteps
 
         for _ in range(self.simulation_timesteps):
             self.next_timestep(to_setup=False, **kwargs)
-            self.vSDN_requests += list(self.network_operator.vSDNs.values())
+            self.vSDN_requests += self.network_operator.get_active_vSDNs()
 
             all_acceptable = (self._time > 1) and (np.sum(
                 self.preprocess_vSDN_requests()) == self.
@@ -245,7 +257,7 @@ class NetworkSimulation:
             self.setup_vSDN_requests(time=self._time)
             _ = self.log_simulation()
 
-        self.save_vSDN_history()
+        self.deactivate_vSDNs(all=True)
         return
 
     def run_multiple_dynamic_simulations(self,
@@ -257,8 +269,8 @@ class NetworkSimulation:
         self.sim_dynamic_type = dynamic_type
         self.min_h_count = self.get_minimal_hypervisor_count(recalculate=True)
 
-        for sim_id in range(sim_repeat):
-            self.simulation_id = sim_id
+        for sim_round in range(sim_repeat):
+            self.simulation_round = sim_round
             if dynamic_type == 'basic':
                 self.run_basic_dynamic_simulation(**kwargs)
             elif dynamic_type == 'conservative':
@@ -267,6 +279,10 @@ class NetworkSimulation:
                 self.run_liberal_dynamic_simulation(**kwargs)
             else:
                 pass
+            self.save_vSDN_history(only_current_round=True)
+            self.vSDN_history[sim_round] = self.network_operator.vSDNs
+            self.delete_all_vSDNs()
+        self.save_vSDN_history()
         return
 
     def next_timestep(self,
@@ -274,7 +290,7 @@ class NetworkSimulation:
                       request_per_timestep: int = 10,
                       **kwargs) -> None:
         self._time += 1
-        self.discard_vSDNs()
+        self.deactivate_vSDNs()
 
         switch_hpairs = self.network_operator.get_allowed_hypervisor_pairs_by_switch(
         )
@@ -283,7 +299,7 @@ class NetworkSimulation:
         ]
         self.TTL_max = kwargs.get('TTL_range', 0)
         self.max_vSDN_size = kwargs.get('max_request_size', 0)
-        self.vSDN_requests = self.request_generator.get_random_vSDN_requests(
+        self.vSDN_requests = self.request_generator_dynamic.get_random_vSDN_requests(
             **dict(kwargs, total_count=request_per_timestep, time_=self._time))
 
         # ! Add vSDN preprocessing
@@ -321,7 +337,7 @@ class NetworkSimulation:
     def generate_vSDN_requests(self, request_size: int, **kwargs) -> None:
         self.vSDN_size = request_size
         (self.vSDN_requests, self.vSDN_coverage,
-         self.vSDN_count) = self.request_generator.get_request_list(
+         self.vSDN_count) = self.request_generator_static.get_request_list(
              request_size, **dict(kwargs, time_=self._time))
         # print(self.vSDN_requests)
         return
@@ -335,7 +351,7 @@ class NetworkSimulation:
         if kwargs.get('vSDN_requests_ilp', None) is None:
             self.vSDN_count_ilp = vSDN_count_ilp
             self.vSDN_max_size_ilp = vSDN_size_ilp
-            return self.request_generator_.get_random_vSDN_requests(
+            return self.request_generator_representative.get_random_vSDN_requests(
                 max_request_size=vSDN_size_ilp,
                 total_count=vSDN_count_ilp,
                 time_=self._time)
@@ -357,17 +373,24 @@ class NetworkSimulation:
         #       *x)
         return
 
-    def discard_vSDNs(self, all: bool = False) -> None:
+    def deactivate_vSDNs(self, all: bool = False) -> None:
         if all:
-            self.network_operator.discard_all_vSDNs()
+            self.network_operator.deactivate_all_vSDNs()
         else:
-            self.network_operator.discard_old_vSDNs(self._time)
+            self.network_operator.deactivate_old_vSDNs(self._time)
         return
+
+    def delete_all_vSDNs(self):
+        self.network_operator.delete_all_vSDNs()
 
     def log_simulation(self):
         log = {
             'simulation_id':
             self.simulation_id,
+            'simulation_round':
+            self.simulation_round,
+            'vSDN_history_path':
+            '',
             'dynamic_simulation_name':
             self.get_dynamic_simulation_name(),
             'static_simulation_name':
@@ -409,7 +432,7 @@ class NetworkSimulation:
             'mean_switch_hpair_count':
             np.mean(self.get_switch_hpair_count()),
             'vSDN_generator_seed':
-            self.request_generator.get_seed(),
+            self.request_generator_static.get_seed(),
             'vSDN_size':
             self.get_vSDN_size(),
             'max_vSDN_size':
@@ -520,9 +543,11 @@ class NetworkSimulation:
         with open(path, 'wb') as f:
             pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
-    def save_vSDN_history(self):
-        self.save2pickle(
-            self._result_folder + 'dynamic/' +
-            f"{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.p",
-            self.network_operator.vSDN_history)
-        self.network_operator.vSDN_history = {}
+    def save_vSDN_history(self, only_current_round: bool = False):
+        if only_current_round:
+            self.save2pickle(
+                self._result_folder + f"history_{self.simulation_round}.p",
+                self.network_operator.vSDNs)
+        else:
+            self.save2pickle(self._result_folder + f"history.p",
+                             self.vSDN_history)

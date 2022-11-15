@@ -89,8 +89,10 @@ class vSDN_request(object):
         self.TTL = TTL
         self.start_time = time_
         self.end_time = time_ + TTL
+        self.active_time = 0
         self.QoS = QoS
-        self.status = False
+        self.active = False
+        self.accepted = False
 
     def __repr__(self) -> str:
         return "%3s %3s %10s %3s" % (self.id, self.controller, self.switches,
@@ -100,6 +102,18 @@ class vSDN_request(object):
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
 
+    def get_id(self):
+        return self.id
+
+    def get_controller(self):
+        return self.controller
+
+    def set_controller(self, c):
+        self.controller = c
+
+    def get_switches(self):
+        return self.switches
+
     def get_size(self) -> int:
         return len(self.switches)
 
@@ -108,27 +122,26 @@ class vSDN_request(object):
 
     def set_end_time(self, t):
         self.end_time = t
+        self.active_time = t - self.start_time
 
     def get_end_time(self):
         return self.end_time
 
-    def get_id(self):
-        return self.id
+    def get_TTL(self):
+        return self.TTL
 
-    def get_switches(self):
-        return self.switches
+    def is_active(self):
+        return self.active
 
-    def get_controller(self):
-        return self.controller
+    def is_accepted(self):
+        return self.accepted
 
-    def set_controller(self, c):
-        self.controller = c
+    def set_active(self):
+        self.active = True
+        self.accepted = True
 
-    def get_status(self):
-        return self.status
-
-    def set_status(self, new_status):
-        self.status = new_status
+    def set_inactive(self):
+        self.active = False
 
 
 class vSDN_request_generator:

@@ -36,7 +36,6 @@ class NetworkOperator:
         self.hypervisor_assignment = {}
         self.hypervisor_switch_control_paths = {}
 
-        self.vSDN_history = {}
         self.vSDNs = {}
         self.vSDN_control_paths = {}
 
@@ -96,7 +95,7 @@ class NetworkOperator:
         return self.hp_acceptance_ratio
 
     def get_active_vSDN_count(self):
-        return len(self.vSDNs)
+        return sum([vSDN.is_active() for _, vSDN in self.vSDNs.items()])
 
     #@measure
     def construct_possible_paths(self, **kwargs):
@@ -150,12 +149,11 @@ class NetworkOperator:
     def get_active_CS_pairs(self) -> set:
         active_cs_pairs = set()
         active_controllers_by_switch = {}
-        if len(self.vSDNs):
-            for _, vSDN in self.vSDNs.items():
-                c = vSDN.get_controller()
-                for s in vSDN.get_switches():
-                    active_cs_pairs.add((c, s))
-                    active_controllers_by_switch.setdefault(s, set()).add(c)
+        for vSDN in self.get_active_vSDNs():
+            c = vSDN.get_controller()
+            for s in vSDN.get_switches():
+                active_cs_pairs.add((c, s))
+                active_controllers_by_switch.setdefault(s, set()).add(c)
         return active_cs_pairs, active_controllers_by_switch
 
     def control_path_calculation(self, **kwargs) -> None:
@@ -249,16 +247,12 @@ class NetworkOperator:
     def process_vSDN_requests(self,
                               request_list: List[vSDN_request.vSDN_request],
                               deploy: bool = True,
-                              time: int = 0,
                               **kwargs) -> List[bool]:
-
-        if 'vSDN_history' not in dir(self):
-            self.vSDN_history = {}
 
         accepted = [False] * len(request_list)
 
         for i, request in enumerate(request_list):
-            self.vSDN_history.setdefault(request.id, copy.deepcopy(request))
+            self.vSDNs.setdefault(request.id, copy.deepcopy(request))
             #print(request)
 
             if not (set(request.get_switches()) <= set(self.nodes)):
@@ -283,18 +277,18 @@ class NetworkOperator:
                 continue
 
             if possible:
-                self.deploy_vSDN(request, c)
+                self.deploy_vSDN(request, c, **kwargs)
             else:
-                if request.get_id() in self.vSDNs:
-                    self.discard_vSDN(request.get_id(), time)
+                if request.is_active() and request.get_id() in self.vSDNs:
+                    self.deactivate_vSDN(request.get_id(), **kwargs)
 
         print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted
 
     def get_control_path_stats(self) -> None:
         primary_path_lengths, secondary_path_lengths = [], []
-        for request_id in self.vSDNs.keys():
-            for _, p in self.vSDN_control_paths[request_id].items():
+        for vSDN in self.get_active_vSDNs():
+            for _, p in self.vSDN_control_paths[vSDN.get_id()].items():
                 pl, ql = gu.control_path_length(p)
                 primary_path_lengths.append(pl)
                 secondary_path_lengths.append(ql)
@@ -314,42 +308,59 @@ class NetworkOperator:
             self.cp_stats = {}
             return
 
-    def deploy_vSDN(self, request: vSDN_request, c: int) -> None:
+    def deploy_vSDN(self,
+                    request: vSDN_request,
+                    c: int,
+                    time: int = None,
+                    **kwargs) -> None:
         request.set_controller(c)
-        request.set_status(True)
+        request.set_active()
         self.vSDNs[request.get_id()] = copy.deepcopy(request)
+
         self.vSDN_control_paths[request.get_id()] = {}
         for s in request.get_switches():
             h, h_ = self.hypervisor_assignment[s]
             self.vSDN_control_paths[request.get_id()][(
                 c, s)] = routing.full_control_path(self.possible_paths, c, h,
                                                    h_, s, self.max_length)
-        self.vSDN_history[request.get_id()] = copy.deepcopy(request)
         return
 
-    def not_deploy_vSDN(self, request: vSDN_request) -> None:
-        self.vSDN_history[request.get_id()] = copy.deepcopy(request)
-        return
+    def deactivate_vSDN(self, id, time) -> None:
+        self.vSDNs[id].set_inactive()
+        self.vSDNs[id].set_end_time(time)
 
-    def discard_vSDN(self, id, time) -> None:
-        _ = self.vSDNs.pop(id, None)
         _ = self.vSDN_control_paths.pop(id, None)
         _ = self.cp_stats.pop(id, None)
-
-        self.vSDN_history[id].set_end_time(time)
         return
 
-    def discard_all_vSDNs(self) -> None:
+    def delete_all_vSDNs(self) -> None:
         self.vSDNs = {}
         self.vSDN_control_paths = {}
         self.cp_stats = {}
         return
 
-    def discard_old_vSDNs(self, time) -> None:
-        for id, vSDN in list(self.vSDNs.items()):
+    def deactivate_old_vSDNs(self, time) -> None:
+        for vSDN in self.get_active_vSDNs():
             if vSDN.get_end_time() <= time:
-                self.discard_vSDN(id, time)
+                self.deactivate_vSDN(vSDN.get_id(), time)
+        return
+
+    def deactivate_all_vSDNs(self) -> None:
+        for vSDN in self.get_active_vSDNs():
+            self.deactivate_vSDN(vSDN.get_id(), vSDN.get_end_time())
         return
 
     def get_active_controllers(self) -> list:
-        return [vSDN.get_controller() for _, vSDN in self.vSDNs.items()]
+        return [
+            vSDN.get_controller() for _, vSDN in self.vSDNs.items()
+            if vSDN.is_active()
+        ]
+
+    def get_active_vSDNs(self, only_ids: bool = False) -> list:
+        if only_ids:
+            return [
+                vSDN_id for vSDN_id, vSDN in self.vSDNs.items()
+                if vSDN.is_active()
+            ]
+        else:
+            return [vSDN for _, vSDN in self.vSDNs.items() if vSDN.is_active()]
