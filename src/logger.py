@@ -1,10 +1,12 @@
 # Standard library imports.
 import functools
 import time
+import json
 
 # Related third party imports.
 
 # Local application/library specific imports.
+from src.data.json_encoder import NumpyEncoder
 
 
 def measure(func):
@@ -19,3 +21,14 @@ def measure(func):
             return returned, runtime
 
     return _time_it
+
+
+def save2json(path, data):
+    with open(path, 'w') as file:
+        json.dump(data,
+                  file,
+                  indent=4,
+                  sort_keys=True,
+                  separators=(', ', ': '),
+                  ensure_ascii=False,
+                  cls=NumpyEncoder)

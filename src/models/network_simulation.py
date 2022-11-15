@@ -13,7 +13,7 @@ import numpy as np
 # Local application/library specific imports.
 from src.models import network_operator
 from src.models import vSDN_request
-from src.logger import measure
+from src.logger import measure, save2json
 
 
 def generate_setting_list(setting_dict: dict = None) -> list:
@@ -27,13 +27,26 @@ def generate_setting_list(setting_dict: dict = None) -> list:
 
 
 class NetworkSimulation:
-    def __init__(self, network_name: str = None, **kwargs) -> None:
+    def __init__(self, **kwargs) -> None:
         self.simulation_id = datetime.datetime.now().strftime(
             '%Y-%m-%d-%H-%M-%S')
         self.simulation_round = 0
         self._time = 0
+        self._network_name = kwargs.pop('network_name')
 
-        self._network_name = network_name
+        self.init_folders(**kwargs)
+
+        save2json(path=self._result_folder + 'settings.json',
+                  data=dict(kwargs, simulation_id=self.simulation_id))
+
+        self.init_network_operator(**kwargs)
+        self.init_request_generators(**kwargs)
+
+        self.logs = []
+        self.vSDN_history = {}
+        return
+
+    def init_folders(self, **kwargs) -> None:
         self._network_path = f"../data/processed/networks/{self._network_name}.gml"
         self._request_folder = f"../data/processed/requests/{self._network_name}/"
         self._network_operator_folder = f"../data/processed/network_operators/{self._network_name}/"
@@ -42,18 +55,6 @@ class NetworkSimulation:
             f"../results/{self._network_name}/") + self.simulation_id + '/'
         if not os.path.isdir(self._result_folder):
             os.mkdir(self._result_folder)
-
-        self.init_network_operator(**kwargs)
-
-        self.request_generator_static = vSDN_request.vSDN_request_generator(
-            self._network_name, self._request_folder, **kwargs)
-        self.request_generator_dynamic = vSDN_request.vSDN_request_generator(
-            self._network_name, self._request_folder, **kwargs)
-        self.request_generator_representative = vSDN_request.vSDN_request_generator(
-            self._network_name, self._request_folder, **kwargs)
-
-        self.logs = []
-        self.vSDN_history = {}
         return
 
     def get_network_operator_path(self, latency_factor, shortest_k, **kwargs):
@@ -79,6 +80,15 @@ class NetworkSimulation:
         network_operator_path = self.get_network_operator_path(**kwargs)
         if not self.is_network_operator_file_available(**kwargs):
             self.save2pickle(network_operator_path, self.network_operator)
+        return
+
+    def init_request_generators(self, **kwargs) -> None:
+        self.request_generator_static = vSDN_request.vSDN_request_generator(
+            self._network_name, self._request_folder, **kwargs)
+        self.request_generator_dynamic = vSDN_request.vSDN_request_generator(
+            self._network_name, self._request_folder, **kwargs)
+        self.request_generator_representative = vSDN_request.vSDN_request_generator(
+            self._network_name, self._request_folder, **kwargs)
         return
 
     def init_simulation(self, **kwargs) -> None:
