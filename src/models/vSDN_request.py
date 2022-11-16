@@ -130,6 +130,9 @@ class vSDN_request(object):
     def get_TTL(self):
         return self.TTL
 
+    def get_QoS(self):
+        return self.QoS
+
     def is_active(self):
         return self.active
 

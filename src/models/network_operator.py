@@ -174,7 +174,7 @@ class NetworkOperator:
         ))
         # print(result)
         self.active_hypervisors = result.get('active hypervisors', None)
-        # print("Active_hypervisors:", len(self.active_hypervisors))
+        print("Active_hypervisors:", self.active_hypervisors)
         self.hp_acceptance_ratio = result.get('hp acceptance ratio', None)
 
         if 'hypervisor assignment' in result:

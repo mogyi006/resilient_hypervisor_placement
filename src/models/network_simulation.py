@@ -206,19 +206,13 @@ class NetworkSimulation:
 
             if not all_acceptable:
                 self.hypervisor_placement(
-                    **{
-                        'hp_type':
-                        'ilp',
-                        'hp_objective':
-                        'acceptance ratio',
-                        'vSDN_requests_ilp':
-                        self.vSDN_requests +
-                        self.network_operator.get_active_vSDNs(),
-                        'required_vSDN_requests':
-                        self.network_operator.get_active_vSDNs(only_ids=True),
-                        'h_count':
-                        self.get_minimal_hypervisor_count(),
-                    })
+                    **dict(kwargs,
+                           vSDN_requests_ilp=(
+                               self.vSDN_requests +
+                               self.network_operator.get_active_vSDNs()),
+                           required_vSDN_requests=self.network_operator.
+                           get_active_vSDNs(only_ids=True),
+                           h_count=self.get_minimal_hypervisor_count()))
 
             new_placement = set(self.network_operator.get_active_hypervisors())
             self.hp_changed = len(new_placement - current_placement)
@@ -254,12 +248,9 @@ class NetworkSimulation:
 
             if not all_acceptable:
                 self.hypervisor_placement(
-                    **{
-                        'hp_type': 'ilp',
-                        'hp_objective': 'acceptance ratio',
-                        'vSDN_requests_ilp': self.vSDN_requests,
-                        'h_count': self.get_minimal_hypervisor_count(),
-                    })
+                    **dict(kwargs,
+                           vSDN_requests_ilp=self.vSDN_requests,
+                           h_count=self.get_minimal_hypervisor_count()))
 
             new_placement = set(self.network_operator.get_active_hypervisors())
             self.hp_changed = len(new_placement - current_placement)
@@ -326,8 +317,9 @@ class NetworkSimulation:
             self.network_operator.hypervisor_placement(
                 **dict(kwargs,
                        vSDN_requests=self.get_vSDN_requests_ilp(**kwargs),
-                       h_count=kwargs.get(
-                           'h_count', self.get_minimal_hypervisor_count())))
+                       h_count=(kwargs.get(
+                           'h_count', self.get_minimal_hypervisor_count()) +
+                                kwargs.get('n_extra_hypervisors', 0))))
         else:
             self.network_operator.hypervisor_placement(**kwargs)
         # _, _ = self.network_operator.get_hypervisor_switch_latencies()

@@ -1,7 +1,7 @@
 # Standard library imports.
+import os
 import datetime
 import itertools
-import json
 
 # Related third party imports.
 import numpy as np
@@ -9,11 +9,15 @@ import tqdm
 
 # Local application/library specific imports.
 from src.models.network_simulation import NetworkSimulation
-from src.data.json_encoder import NumpyEncoder
+import src.logger as logger
 
-networks = [('25_italy', 14), ('26_usa', 14), ('37_cost', 19),
+networks = [('25_italy', 25), ('26_usa', 14), ('37_cost', 19),
             ('50_germany', 19)]
 network_name, max_vSDN_size = networks[0]
+
+simulation_group_id = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+simulation_group_folder = f"../results/{network_name}/static/{simulation_group_id}/"
+os.mkdir(simulation_group_folder)
 
 hp_settings = {
     'heu': ('heuristics', 'hypervisor count'),
@@ -23,9 +27,9 @@ hp_settings = {
 static_type = 'ilpa'
 hp_type, hp_objective = hp_settings[static_type]
 
-vSDN_count_ilp = 100
-
 possible_settings = {
+    'simulation_group_id': [simulation_group_id],
+    'simulation_group_folder': [simulation_group_folder],
     'network_name': [network_name],
     'latency_factor': [0.4],
     'shortest_k': [16],
@@ -35,8 +39,9 @@ possible_settings = {
     'sim_repeat': [10],
     'repeat': [100],
     'max_request_size': [max(2, int(max_vSDN_size / 2))],
-    'vSDN_count_ilp': [vSDN_count_ilp],
+    'vSDN_count_ilp': [100],
     'vSDN_size_ilp': [max(2, int(max_vSDN_size / 2))],
+    'n_extra_hypervisors': np.arange(0, 5, 1)
 }
 param_names_1 = list(possible_settings.keys())
 setting_generator = [
@@ -57,13 +62,5 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
         possible_request_settings=possible_request_settings, **setting)
     simulation_logs.extend(ns.get_logs())
 
-with open(
-        f"../results/{network_name}/{datetime.date.today()}-{network_name}-{static_type}-ph-{0}.json",
-        'w') as file:
-    json.dump(simulation_logs,
-              file,
-              indent=4,
-              sort_keys=True,
-              separators=(', ', ': '),
-              ensure_ascii=False,
-              cls=NumpyEncoder)
+logger.save2json(simulation_group_folder + "simulation-group-results.json",
+                 simulation_logs)

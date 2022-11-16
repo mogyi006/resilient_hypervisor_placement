@@ -7,8 +7,7 @@ from gurobipy import GRB
 
 # Local application/library specific imports.
 import src.data.graph_utilities as gu
-
-# Local application/library specific imports.
+import src.models.objectives as objectives
 
 
 def lcrhpp_minh(network_operator=None, **kwargs):
@@ -96,7 +95,7 @@ def lcrhpp_maxa(network_operator,
     HS_pairs = list(itertools.product(H, S))
     HHS_pairs = list(itertools.product(H_pairs, S))
     CS_pairs = list(itertools.product(C, S))
-    R = {r.get_id(): r.get_switches() for r in vSDN_requests}
+    R = {r.get_id(): r for r in vSDN_requests}
     CR_pairs = list(itertools.product(C, R.keys()))
 
     allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
@@ -154,9 +153,8 @@ def lcrhpp_maxa(network_operator,
         ]) for c, s in CS_pairs)
 
         # The request can be accepted with the controller if it can control all of its switches
-        c_7 = model.addConstrs(controller_controls_request[(
-            c,
-            r)] == gp.and_([controller_controls_switch[(c, s)] for s in R[r]])
+        c_7 = model.addConstrs(controller_controls_request[(c, r)] == gp.and_(
+            [controller_controls_switch[(c, s)] for s in R[r].get_switches()])
                                for c, r in CR_pairs)
 
         # The request is acceptable if there is a controller that can control all of its switches
@@ -172,8 +170,13 @@ def lcrhpp_maxa(network_operator,
         c_10 = model.addConstr(gp.quicksum(active_hypervisors) <= h_count)
 
         # Maximize the acceptance ratio
-        model.setObjective(
-            gp.quicksum(controllable_request) / len(R), GRB.MAXIMIZE)
+        # model.setObjective(
+        #     gp.quicksum(controllable_request) / len(R), GRB.MAXIMIZE)
+        objectives.objectives[kwargs.get('ilp_objective_function',
+                                         'maximize_average')](
+                                             model=model,
+                                             Vars=controllable_request,
+                                             vSDN_requests=R)
         model.optimize()
 
         # print(model.ObjVal)
