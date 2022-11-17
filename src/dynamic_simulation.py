@@ -30,20 +30,20 @@ hp_type, hp_objective = hp_settings[dynamic_type]
 
 vSDN_count_ilp = 100
 request_per_timestep = 10
-TTL_range = 10
+TTL_range = 6
 
 possible_settings = {
     'simulation_group_id': [simulation_group_id],
     'simulation_group_folder': [simulation_group_folder],
     'network_name': [network_name],
-    'latency_factor': [0.4],
+    'latency_factor': [0.5],
     'shortest_k': [16],
-    'dynamic_type': ['conservative'],  # list(hp_settings.keys()),
+    'dynamic_type': list(hp_settings.keys()),
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],
     'ilp_objective_function': ['maximize_total_revenue'],
-    'sim_repeat': [1],
-    'timesteps': [100],
+    'sim_repeat': [10],
+    'timesteps': [200],
     'max_request_size': [max_vSDN_size],
     'request_per_timestep': [request_per_timestep],
     'TTL_range': [TTL_range],

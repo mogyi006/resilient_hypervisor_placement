@@ -4,6 +4,7 @@
 import gurobipy as gp
 
 # Local application/library specific imports.
+import src.models.metrics as metrics
 
 objectives = {}
 objective = lambda f: objectives.setdefault(f.__name__, f)
@@ -52,11 +53,6 @@ def maximize_total_revenue(model: gp.Model = None,
                            vSDN_requests: dict = None,
                            **kwargs):
     model.setObjective(
-        gp.quicksum(Vars[i] * estimate_revenue(vSDN_request)
+        gp.quicksum(Vars[i] * metrics.metrics['get_revenue'](vSDN_request)
                     for i, vSDN_request in vSDN_requests.items()),
         gp.GRB.MAXIMIZE)
-
-
-def estimate_revenue(vSDN_request):
-    return vSDN_request.get_size() * vSDN_request.get_TTL(
-    ) * vSDN_request.get_QoS()
