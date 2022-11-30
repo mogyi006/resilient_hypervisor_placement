@@ -11,6 +11,7 @@ from typing import List, Tuple
 import numpy as np
 
 # Local application/library specific imports.
+import src.models.metrics as metrics
 
 # def generate_vSDN_request(request_file_path, TTL_range, time_):
 #     with open(request_file_path, mode='r') as f:
@@ -127,6 +128,9 @@ class vSDN_request(object):
     def get_end_time(self):
         return self.end_time
 
+    def get_active_time(self):
+        return self.active_time
+
     def get_TTL(self):
         return self.TTL
 
@@ -145,6 +149,9 @@ class vSDN_request(object):
 
     def set_inactive(self):
         self.active = False
+
+    def get_metric(self, metric: str = None):
+        return metrics.metrics[metric](self)
 
 
 class vSDN_request_generator:

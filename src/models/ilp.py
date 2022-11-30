@@ -4,6 +4,7 @@ import itertools
 # Related third party imports.
 import gurobipy as gp
 from gurobipy import GRB
+env = gp.Env()
 
 # Local application/library specific imports.
 import src.data.graph_utilities as gu
@@ -18,9 +19,8 @@ def lcrhpp_minh(network_operator=None, **kwargs):
     HHS_pairs = list(itertools.product(H_pairs, S))
     allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
     )
-    try:
-        model = gp.Model("ilp min h count")
 
+    with gp.Model(env=env) as model:
         active_hypervisors = model.addVars(H, vtype=GRB.BINARY)
         hypervisor_controls_switch = model.addVars(HS_pairs, vtype=GRB.BINARY)
         hypervisor_pair_controls_switch = model.addVars(HHS_pairs,
@@ -75,12 +75,6 @@ def lcrhpp_minh(network_operator=None, **kwargs):
         # print(result['hypervisor assignment'])
         return result
 
-    except gp.GurobiError as e:
-        print('Error code ' + str(e.errno) + ': ' + str(e))
-
-    except AttributeError:
-        print('Encountered an attribute error')
-
 
 def lcrhpp_maxa(network_operator,
                 vSDN_requests,
@@ -101,9 +95,8 @@ def lcrhpp_maxa(network_operator,
     allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
         get_all=True)
     allowed_cs_H_pairs = network_operator.quartets_by_cs
-    try:
-        model = gp.Model("ilp max a ratio")
 
+    with gp.Model(env=env) as model:
         active_hypervisors = model.addVars(H, vtype=GRB.BINARY)
         hypervisor_controls_switch = model.addVars(HS_pairs, vtype=GRB.BINARY)
         hypervisor_pair_controls_switch = model.addVars(HHS_pairs,
@@ -200,9 +193,3 @@ def lcrhpp_maxa(network_operator,
         # print(result['active hypervisors'])
         # print(result['hypervisor assignment'])
         return result
-
-    except gp.GurobiError as e:
-        print('Error code ' + str(e.errno) + ': ' + str(e))
-
-    except AttributeError:
-        print('Encountered an attribute error')

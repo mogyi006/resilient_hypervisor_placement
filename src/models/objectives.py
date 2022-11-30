@@ -53,6 +53,6 @@ def maximize_total_revenue(model: gp.Model = None,
                            vSDN_requests: dict = None,
                            **kwargs):
     model.setObjective(
-        gp.quicksum(Vars[i] * metrics.metrics['get_revenue'](vSDN_request)
+        gp.quicksum(Vars[i] * metrics.metrics['revenue'](vSDN_request)
                     for i, vSDN_request in vSDN_requests.items()),
         gp.GRB.MAXIMIZE)

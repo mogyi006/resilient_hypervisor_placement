@@ -168,8 +168,7 @@ def construct_quartets(C, S, H, all_paths, max_length):
     Qc, Qs = {}, {}
     Qcs = {}
 
-    for c, s in itertools.product(
-            C, S):  #tqdm(itertools.product(C, S), total=len(C)*len(S)):
+    for c, s in itertools.product(C, S):
         # (c,c,c,c)
         if c == s and c in H:
             q = (c, c, c, c)
@@ -179,8 +178,8 @@ def construct_quartets(C, S, H, all_paths, max_length):
             Qcs.setdefault((s, s), set()).add((s, s))
 
         # (c,s,s,s)
-        if c != s and s in H and all_paths[(
-                c, s)] and all_paths[(c, s)][0]['length'] < max_length:
+        if (c != s and s in H and all_paths[(c, s)]
+                and all_paths[(c, s)][0]['length'] < max_length):
             q = (c, s, s, s)
             Q.add(q)
             Qc.setdefault(c, []).append(q)

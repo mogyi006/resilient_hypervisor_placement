@@ -10,11 +10,11 @@ import tqdm
 
 # Local application/library specific imports.
 from src.models.network_simulation import NetworkSimulation
-from src.data.json_encoder import NumpyEncoder
+import src.logger as logger
 
 networks = [('25_italy', 25), ('26_usa', 26), ('37_cost', 37),
             ('50_germany', 50)]
-network_name, max_vSDN_size = networks[0]
+network_name, max_vSDN_size = networks[1]
 
 simulation_group_id = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 simulation_group_folder = f"../results/{network_name}/dynamic/{simulation_group_id}/"
@@ -36,14 +36,15 @@ possible_settings = {
     'simulation_group_id': [simulation_group_id],
     'simulation_group_folder': [simulation_group_folder],
     'network_name': [network_name],
-    'latency_factor': [0.5],
+    'latency_factor': [0.8],
     'shortest_k': [16],
-    'dynamic_type': list(hp_settings.keys()),
+    'dynamic_type': ['conservative'],
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],
     'ilp_objective_function': ['maximize_total_revenue'],
-    'sim_repeat': [10],
-    'timesteps': [200],
+    'cp_method': ['max_total_hpair'],
+    'sim_repeat': [1],
+    'timesteps': [10],
     'max_request_size': [max_vSDN_size],
     'request_per_timestep': [request_per_timestep],
     'TTL_range': [TTL_range],
@@ -63,12 +64,5 @@ for setting in tqdm.tqdm(setting_generator, total=len(setting_generator)):
     ns.run_multiple_dynamic_simulations(**setting)
     simulation_logs.extend(ns.get_logs())
 
-with open(simulation_group_folder + "simulation-group-results.json",
-          'w') as file:
-    json.dump(simulation_logs,
-              file,
-              indent=4,
-              sort_keys=True,
-              separators=(', ', ': '),
-              ensure_ascii=False,
-              cls=NumpyEncoder)
+logger.save2json(simulation_group_folder + "simulation-group-results.json",
+                 simulation_logs)

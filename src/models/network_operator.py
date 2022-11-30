@@ -14,6 +14,7 @@ import src.data.routing as routing
 import src.data.graph_utilities as gu
 from src.models.hypervisor_placement import hypervisor_placement_solutions
 from src.models import vSDN_request
+import src.models.controller_placement as controller_placement
 
 
 # Network operator class
@@ -174,7 +175,7 @@ class NetworkOperator:
         ))
         # print(result)
         self.active_hypervisors = result.get('active hypervisors', None)
-        print("Active_hypervisors:", self.active_hypervisors)
+        # print("Active_hypervisors:", self.active_hypervisors)
         self.hp_acceptance_ratio = result.get('hp acceptance ratio', None)
 
         if 'hypervisor assignment' in result:
@@ -183,17 +184,18 @@ class NetworkOperator:
             self.hypervisor_switch_control_paths = result.get(
                 'hypervisor2switch control paths', None)
         else:
-            self.hypervisor_assignment, self.hypervisor_switch_control_paths = gu.assign_switches_to_hypervisors(
-                S=self.nodes,
-                Tc=result.get('Tc', self.triplets_by_switches),
-                hypervisors=self.active_hypervisors,
-                main_controller=result.get('main controller', None),
-                Smc=result.get('S_controllable', []),
-                all_paths=self.possible_paths,
-                **kwargs)
+            (self.hypervisor_assignment, self.hypervisor_switch_control_paths
+             ) = gu.assign_switches_to_hypervisors(
+                 S=self.nodes,
+                 Tc=result.get('Tc', self.triplets_by_switches),
+                 hypervisors=self.active_hypervisors,
+                 main_controller=result.get('main controller', None),
+                 Smc=result.get('S_controllable', []),
+                 all_paths=self.possible_paths,
+                 **kwargs)
 
-        if 'request status' in result:
-            print(result.get('request status'))
+        # if 'request status' in result:
+        #     print(result.get('request status'))
         return None
 
     def get_minimal_hypervisor_count(self, **kwargs) -> int:
@@ -218,28 +220,6 @@ class NetworkOperator:
         print(f"Secondary--\t{np.amax(secondary_paths):5.1f}")
         return primary_paths, secondary_paths
 
-    def find_controller_for_request(self, request: vSDN_request):
-        possible_controllers_ = set()
-        for idx, s in enumerate(request.get_switches()):
-            h, h_ = self.hypervisor_assignment[s]
-            possible_controllers_for_switch = set()
-            for c in self.possible_controllers:
-                if (((c, h, h_, s) in self.quartets_by_controllers[c])
-                        or ((c, h_, h, s) in self.quartets_by_controllers[c])):
-                    possible_controllers_for_switch.add(c)
-            if idx == 0:
-                possible_controllers_ |= possible_controllers_for_switch
-            else:
-                possible_controllers_ &= possible_controllers_for_switch
-        if possible_controllers_:
-            if request.get_controller() in possible_controllers_:
-                return request.get_controller()
-            else:
-                return random.choice(
-                    list(possible_controllers_))  # ! controller selection
-        else:
-            return None
-
     def preprocess_vSDN_requests(
             self, request_list: List[vSDN_request.vSDN_request]) -> List[bool]:
         return self.process_vSDN_requests(request_list, deploy=False)
@@ -260,7 +240,9 @@ class NetworkOperator:
                       request.get_switches())
                 continue
 
-            c = self.find_controller_for_request(request)
+            c = controller_placement.algorithms[kwargs.get(
+                'cp_method', 'random_controller')](self, request)
+
             possible = c is not None
             if possible:
                 for s in request.get_switches():
