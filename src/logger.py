@@ -25,10 +25,13 @@ def measure(func):
 
 def save2json(path, data):
     with open(path, 'w') as file:
-        json.dump(data,
-                  file,
-                  indent=4,
-                  sort_keys=True,
-                  separators=(', ', ': '),
-                  ensure_ascii=False,
-                  cls=NumpyEncoder)
+        json.dump(
+            data,
+            file,
+            # default=lambda o: f"<<non-serializable>>: {type(o).__qualname__}",
+            default=str,
+            indent=4,
+            sort_keys=True,
+            separators=(', ', ': '),
+            ensure_ascii=False,
+            cls=NumpyEncoder)

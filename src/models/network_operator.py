@@ -24,16 +24,22 @@ class NetworkOperator:
         self.nodes = list(self.graph.nodes)
         self.links = set(self.graph.edges)
 
-        self.graph_diameter = gu.get_graph_diameter(self.graph)
-        self.latency_factor = 1.
-        self.max_length = self.latency_factor * self.graph_diameter
-        self.shortest_k = 16
+        self.info = {}
+
+        self.info['n_nodes'] = len(self.nodes)
+        self.info['n_links'] = len(self.links)
+        self.info['graph_diameter'] = int(gu.get_graph_diameter(self.graph))
+        self.info['latency_factor'] = 1.
+        self.info['max_length'] = self.info['latency_factor'] * self.info[
+            'graph_diameter']
+        self.info['shortest_k'] = 16
 
         # TODO Possible hypervisor and controller locations
         self.possible_hypervisors = list(self.graph.nodes)
         self.possible_controllers = list(self.graph.nodes)
 
         self.active_hypervisors = set()
+        self.set_active_hypervisor_info()
         self.hypervisor_assignment = {}
         self.hypervisor_switch_control_paths = {}
 
@@ -43,42 +49,26 @@ class NetworkOperator:
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
 
-    def get_graph_diameter(self):
-        return self.graph_diameter
-
     def set_max_length(self, latency_factor, **kwargs):
-        self.latency_factor = latency_factor
-        self.max_length = self.latency_factor * self.graph_diameter
+        self.info['latency_factor'] = latency_factor
+        self.info['max_length'] = self.info['latency_factor'] * self.info[
+            'graph_diameter']
 
     def get_max_length(self):
-        return int(self.max_length)
+        return int(self.info['max_length'])
 
     def get_latency_factor(self):
-        return self.latency_factor
+        return self.info['latency_factor']
 
     def set_shortest_k(self, shortest_k, **kwargs):
-        self.shortest_k = shortest_k
+        self.info['shortest_k'] = shortest_k
 
     def get_shortest_k(self):
-        return self.shortest_k
+        return self.info['shortest_k']
 
-    def get_hp_type(self):
-        return self.hp_type
-
-    def get_hp_objective(self):
-        return self.hp_objective
-
-    def get_hp_greedy_repeat(self):
-        return self.hp_greedy_repeat
-
-    def get_ha_objective(self):
-        return 'avg cp length'
-
-    def get_hp_runtime(self):
-        return float(f"{self.hp_runtime:.2f}")
-
-    def get_cp_objective(self):
-        return 'random'
+    def set_active_hypervisor_info(self):
+        self.info['active_hypervisors'] = list(self.active_hypervisors)
+        self.info['n_hypervisors'] = len(self.active_hypervisors)
 
     def get_active_hypervisors(self):
         return list(self.active_hypervisors)
@@ -89,12 +79,6 @@ class NetworkOperator:
     def get_chs_cp_stat(self, key):
         return int(self.cp_stats.get(key, -1))
 
-    def get_node_count(self):
-        return len(self.nodes)
-
-    def get_hp_acceptance_ratio(self):
-        return self.hp_acceptance_ratio
-
     def get_active_vSDN_count(self):
         return sum([vSDN.is_active() for _, vSDN in self.vSDNs.items()])
 
@@ -102,8 +86,8 @@ class NetworkOperator:
     def construct_possible_paths(self, **kwargs):
         if 'max_length' not in kwargs and 'shortest_k' not in kwargs:
             kwargs = {
-                'max_length': self.max_length,
-                'shortest_k': self.shortest_k
+                'max_length': self.info['max_length'],
+                'shortest_k': self.info['shortest_k']
             }
         self.possible_paths = routing.get_all_paths(G=self.graph, **kwargs)
         return None
@@ -112,19 +96,21 @@ class NetworkOperator:
     def construct_path_disjoint_triplets(self, **kwargs):
         (self.triplets, self.triplets_by_hypervisors,
          self.triplets_by_switches) = gu.quartets_to_triplets(self.quartets)
-        return None
+        self.info['n_triplets'] = len(self.triplets)
+        return
 
     #@measure
     def construct_path_disjoint_quartets(self, **kwargs):
         (self.quartets, self.quartets_by_controllers,
-         self.quartets_by_switches,
-         self.quartets_by_cs) = gu.construct_quartets(
+         self.quartets_by_switches, self.quartets_by_cs,
+         self.quartets_by_hh) = gu.construct_quartets(
              all_paths=self.possible_paths,
              C=self.possible_controllers,
              S=self.nodes,
              H=self.possible_hypervisors,
-             max_length=self.max_length)
-        return None
+             max_length=self.info['max_length'])
+        self.info['n_quartets'] = len(self.quartets)
+        return
 
     def get_allowed_hypervisor_pairs_by_switch(self, get_all: bool = False):
         """Return the hypervisor pairs that enable control paths
@@ -166,17 +152,21 @@ class NetworkOperator:
     #@measure
     def hypervisor_placement(self, **kwargs):
         # print(kwargs.keys())
-        self.hp_type = kwargs.get('hp_type')
-        self.hp_objective = kwargs.get('hp_objective')
-        self.hp_greedy_repeat = kwargs.get('repeat')
-        result, self.hp_runtime = hypervisor_placement_solutions(**dict(
-            kwargs,
-            network_operator=self,
-        ))
+        self.info.update(kwargs)
+
+        result, self.info['hp_runtime'] = hypervisor_placement_solutions(
+            **dict(
+                kwargs,
+                network_operator=self,
+            ))
         # print(result)
+        # print(result['request status'])
+        # print(result['flexibility status'])
         self.active_hypervisors = result.get('active hypervisors', None)
+        self.set_active_hypervisor_info()
         # print("Active_hypervisors:", self.active_hypervisors)
-        self.hp_acceptance_ratio = result.get('hp acceptance ratio', None)
+        self.info['hp_acceptance_ratio'] = result.get('hp acceptance ratio',
+                                                      None)
 
         if 'hypervisor assignment' in result:
             self.hypervisor_assignment = result.get('hypervisor assignment',
@@ -192,18 +182,34 @@ class NetworkOperator:
                  main_controller=result.get('main controller', None),
                  Smc=result.get('S_controllable', []),
                  all_paths=self.possible_paths,
-                 **kwargs)
+                 **dict(kwargs, max_length=self.info['max_length']))
 
         # if 'request status' in result:
         #     print(result.get('request status'))
-        return None
+        return
+
+    def evaluate_hypervisor_placement(self, active_hypervisors, request_list,
+                                      **kwargs):
+        self.active_hypervisors = active_hypervisors
+        (self.hypervisor_assignment, self.hypervisor_switch_control_paths
+         ) = gu.assign_switches_to_hypervisors(
+             S=self.nodes,
+             Tc=self.triplets_by_switches,
+             hypervisors=self.active_hypervisors,
+             main_controller=None,
+             Smc=[],
+             all_paths=self.possible_paths,
+             **kwargs)
+        self.set_active_hypervisor_info()
+        return self.preprocess_vSDN_requests(request_list)
 
     def get_minimal_hypervisor_count(self, **kwargs) -> int:
-        result, self.hp_runtime = hypervisor_placement_solutions(
+        result, _ = hypervisor_placement_solutions(
             **{
                 'hp_type': 'ilp',
                 'hp_objective': 'hypervisor count',
-                'network_operator': self
+                'network_operator': self,
+                'hypervisor_capacity': kwargs.get('hypervisor_capacity', None)
             })
         return len(result.get('active hypervisors', None))
 
@@ -220,19 +226,20 @@ class NetworkOperator:
         print(f"Secondary--\t{np.amax(secondary_paths):5.1f}")
         return primary_paths, secondary_paths
 
-    def preprocess_vSDN_requests(
-            self, request_list: List[vSDN_request.vSDN_request]) -> List[bool]:
-        return self.process_vSDN_requests(request_list, deploy=False)
+    def preprocess_vSDN_requests(self,
+                                 request_list: List[vSDN_request.vSDN_request],
+                                 **kwargs) -> List[bool]:
+        return self.process_vSDN_requests(request_list, deploy=False, **kwargs)
 
     def process_vSDN_requests(self,
                               request_list: List[vSDN_request.vSDN_request],
                               deploy: bool = True,
                               **kwargs) -> List[bool]:
-
         accepted = [False] * len(request_list)
 
         for i, request in enumerate(request_list):
-            self.vSDNs.setdefault(request.id, copy.deepcopy(request))
+            if deploy:
+                self.vSDNs.setdefault(request.id, copy.deepcopy(request))
             #print(request)
 
             if not (set(request.get_switches()) <= set(self.nodes)):
@@ -264,7 +271,7 @@ class NetworkOperator:
                 if request.is_active() and request.get_id() in self.vSDNs:
                     self.deactivate_vSDN(request.get_id(), **kwargs)
 
-        print(f"Acceptance ratio: {np.mean(accepted):.3f}")
+        # print(f"Acceptance ratio: {np.mean(accepted):.3f}")
         return accepted
 
     def get_control_path_stats(self) -> None:
@@ -304,7 +311,8 @@ class NetworkOperator:
             h, h_ = self.hypervisor_assignment[s]
             self.vSDN_control_paths[request.get_id()][(
                 c, s)] = routing.full_control_path(self.possible_paths, c, h,
-                                                   h_, s, self.max_length)
+                                                   h_, s,
+                                                   self.info['max_length'])
         return
 
     def deactivate_vSDN(self, id, time) -> None:

@@ -56,3 +56,14 @@ def maximize_total_revenue(model: gp.Model = None,
         gp.quicksum(Vars[i] * metrics.metrics['revenue'](vSDN_request)
                     for i, vSDN_request in vSDN_requests.items()),
         gp.GRB.MAXIMIZE)
+
+
+@objective
+def maximize_joint_sum(model: gp.Model = None,
+                       Vars: gp.tupledict = None,
+                       Vars_2: gp.tupledict = None,
+                       weight: float = 0.5,
+                       **kwargs):
+    model.setObjective(
+        gp.quicksum(Vars[i] + weight * (1 - Vars[i]) * Vars_2[i]
+                    for i in Vars.keys()), gp.GRB.MAXIMIZE)

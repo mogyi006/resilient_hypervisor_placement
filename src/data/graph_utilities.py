@@ -167,6 +167,7 @@ def construct_quartets(C, S, H, all_paths, max_length):
     Q = set()
     Qc, Qs = {}, {}
     Qcs = {}
+    Qhh = {}
 
     for c, s in itertools.product(C, S):
         # (c,c,c,c)
@@ -176,6 +177,7 @@ def construct_quartets(C, S, H, all_paths, max_length):
             Qc.setdefault(c, []).append(q)
             Qs.setdefault(s, []).append(q)
             Qcs.setdefault((s, s), set()).add((s, s))
+            Qhh.setdefault((s, s), set()).add((s, s))
 
         # (c,s,s,s)
         if (c != s and s in H and all_paths[(c, s)]
@@ -185,6 +187,7 @@ def construct_quartets(C, S, H, all_paths, max_length):
             Qc.setdefault(c, []).append(q)
             Qs.setdefault(s, []).append(q)
             Qcs.setdefault((c, s), set()).add((s, s))
+            Qhh.setdefault((s, s), set()).add((c, s))
 
         # (c,c,h,s) and (c,h,c,s)
         if c != s and c in H:
@@ -197,6 +200,8 @@ def construct_quartets(C, S, H, all_paths, max_length):
                         Qs.setdefault(s, []).append(q)
                         Qcs.setdefault((c, s), set()).add((min(c,
                                                                h), max(c, h)))
+                        Qhh.setdefault((min(c, h), max(c, h)), set()).add(
+                            (c, s))
 
         for h, h_ in itertools.combinations(set(H) - {c, s}, 2):
             if is_quartet_possible(all_paths, c, h, h_, s, max_length):
@@ -205,8 +210,9 @@ def construct_quartets(C, S, H, all_paths, max_length):
                 Qc.setdefault(c, []).append(q)
                 Qs.setdefault(s, []).append(q)
                 Qcs.setdefault((c, s), set()).add((min(h, h_), max(h, h_)))
+                Qhh.setdefault((min(h, h_), max(h, h_)), set()).add((c, s))
 
-    return Q, Qc, Qs, Qcs
+    return Q, Qc, Qs, Qcs, Qhh
 
 
 def quartets_to_triplets(Q):
@@ -370,7 +376,16 @@ def assign_switches_to_hypervisors(S,
         # print("Number of possible hypervisor pairs: ", len(possible_hypervisor_pairs))
         if not possible_hypervisor_pairs:
             print("No path-disjoint cover for switch ", s)
-            raise ValueError
+            hypervisor_assignment[s] = (-1, -1)
+            hypervisor2switch_control_paths[(-1, -1, s)] = ({
+                'length': 0,
+                'path': set()
+            }, {
+                'length': 0,
+                'path': set()
+            })
+            continue
+            # raise ValueError
 
         best_hypervisor_pair = None
         best_h2s_control_paths = None
@@ -440,8 +455,11 @@ def assign_switches_to_hypervisors(S,
                 hypervisor2switch_control_paths[best_hypervisor_pair +
                                                 (s, )] = best_h2s_control_paths
             else:
+                hypervisor_assignment[s] = best_hypervisor_pair
+                hypervisor2switch_control_paths[best_hypervisor_pair +
+                                                (s, )] = best_h2s_control_paths
                 # print("No path-disjoint cover found")
-                raise ValueError
+                # raise ValueError
 
     return hypervisor_assignment, hypervisor2switch_control_paths
 

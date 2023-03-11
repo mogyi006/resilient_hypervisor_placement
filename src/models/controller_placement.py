@@ -18,8 +18,8 @@ def random_controller(network_operator, vSDN_request):
         if vSDN_request.get_controller() in possible_controllers_:
             return vSDN_request.get_controller()
         else:
-            print(vSDN_request)
-            print(possible_controllers_)
+            # print(vSDN_request)
+            # print(possible_controllers_)
             return random.choice(list(possible_controllers_))
     else:
         return None
@@ -52,7 +52,7 @@ def max_total_hpair(network_operator, vSDN_request):
 def find_possible_controllers(network_operator, vSDN_request):
     possible_controllers_ = set(network_operator.possible_controllers)
     for s in vSDN_request.get_switches():
-        print(s, possible_controllers_)
+        # print(s, possible_controllers_)
         h, h_ = network_operator.hypervisor_assignment[s]
         possible_controllers_for_switch = set()
         for c in network_operator.possible_controllers:

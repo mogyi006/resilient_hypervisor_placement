@@ -14,7 +14,7 @@ import src.logger as logger
 
 networks = [('25_italy', 25), ('26_usa', 26), ('37_cost', 37),
             ('50_germany', 50)]
-network_name, max_vSDN_size = networks[1]
+network_name, max_vSDN_size = networks[2]
 
 simulation_group_id = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 simulation_group_folder = f"../results/{network_name}/dynamic/{simulation_group_id}/"
@@ -36,15 +36,15 @@ possible_settings = {
     'simulation_group_id': [simulation_group_id],
     'simulation_group_folder': [simulation_group_folder],
     'network_name': [network_name],
-    'latency_factor': [0.8],
+    'latency_factor': [0.7],
     'shortest_k': [16],
-    'dynamic_type': ['conservative'],
+    'dynamic_type': [dynamic_type],
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],
     'ilp_objective_function': ['maximize_total_revenue'],
-    'cp_method': ['max_total_hpair'],
-    'sim_repeat': [1],
-    'timesteps': [10],
+    'cp_method': ['max_total_hpair', 'random_controller'],
+    'sim_repeat': [5],
+    'timesteps': [100],
     'max_request_size': [max_vSDN_size],
     'request_per_timestep': [request_per_timestep],
     'TTL_range': [TTL_range],
