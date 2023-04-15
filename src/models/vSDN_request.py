@@ -222,6 +222,7 @@ class vSDN_request_generator:
                          **kwargs) -> Tuple[List[vSDN_request], float, int]:
         request_file_path = self.request_file_dict[request_size]['file_path']
         number_of_subgraphs = self.request_file_dict[request_size]['file_size']
+
         if coverage is not None and coverage <= 1 and coverage > 0:
             number_of_requests = int(coverage * number_of_subgraphs)
         elif count is not None and count >= 1:
@@ -230,9 +231,10 @@ class vSDN_request_generator:
         else:
             return None
 
-        line_indexes = self.random_generator.integers(
-            1, self.request_file_dict[request_size]['file_size'],
-            number_of_requests)
+        line_indexes = self.random_generator.choice(np.arange(
+            1, number_of_subgraphs + 1),
+                                                    number_of_requests,
+                                                    replace=False)
 
         return [
             self.get_request_from_file(request_file_path, line_index, **kwargs)

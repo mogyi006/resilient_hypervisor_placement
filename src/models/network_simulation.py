@@ -17,8 +17,7 @@ from src.logger import measure, save2json
 
 logging.basicConfig(
     format="[%(funcName)30s()] %(message)s",
-    level=logging.DEBUG,
-    force=True,
+    level=logging.INFO,
 )
 
 
@@ -42,6 +41,7 @@ class NetworkSimulation:
         self.results['simulation_round'] = 0
         self.results['timestep'] = 0
         self.settings['network_name'] = kwargs.pop('network_name')
+        self.settings['auto_accept'] = False
 
         self.init_folders(**kwargs)
 
@@ -126,7 +126,17 @@ class NetworkSimulation:
         for request_setting in request_setting_list:
             self.run_static_request_simulation(**request_setting)
             _ = self.log_simulation()
+            logging.info(f"Simulation results:" + ', '.join(
+                f'{q:5.2f}' if isinstance(q, float) else f'{q:4d}'
+                for q in self.results.values()))
 
+            if (self.settings['auto_accept'] == False
+                    and self.settings['vSDN_coverage'] == 1
+                    and self.results['vSDN_acceptance_ratio'] == 1):
+                logging.info("Auto accept enabled...")
+                self.settings['auto_accept'] = True
+
+        self.settings['auto_accept'] = False
         return
 
     def run_optimal_static_simulation(self,
@@ -287,7 +297,7 @@ class NetworkSimulation:
         self.settings['simulation_type'] = 'dynamic'
         self.sim_dynamic_type = dynamic_type
         self.results['min_h_count'] = self.get_minimal_hypervisor_count(
-            recalculate=True)
+            recalculate=True, **kwargs)
 
         for sim_round in range(sim_repeat):
             self.results['simulation_round'] = sim_round
@@ -331,23 +341,28 @@ class NetworkSimulation:
             self.setup_vSDN_requests()
 
     def hypervisor_placement(self, **kwargs) -> None:
-        self.network_operator.hypervisor_placement(
-            **dict(kwargs,
-                   vSDN_requests=self.get_vSDN_requests_ilp(**kwargs),
-                   n_hypervisors=(kwargs.get(
-                       'n_hypervisors', self.get_minimal_hypervisor_count()) +
-                                  kwargs.get('n_extra_hypervisors', 0))))
+        self.network_operator.hypervisor_placement(**dict(
+            kwargs,
+            vSDN_requests=self.get_vSDN_requests_ilp(**kwargs),
+            n_hypervisors=(kwargs.get(
+                'n_hypervisors', self.get_minimal_hypervisor_count(**kwargs)) +
+                           kwargs.get('n_extra_hypervisors', 0))))
         return
 
     def get_minimal_hypervisor_count(self,
                                      recalculate: bool = False,
                                      **kwargs) -> int:
-        if recalculate:
-            return self.network_operator.get_minimal_hypervisor_count(**kwargs)
-        elif hasattr(self, 'min_h_count'):
-            return getattr(self, 'min_h_count')
+        logging.debug(
+            f"Minimal hypervisor count: {self.results.get('min_h_count')}")
+        logging.debug(f"Recalculate: {recalculate}")
+
+        if not recalculate and 'min_h_count' in self.results:
+            return self.results['min_h_count']
         else:
-            return self.network_operator.get_minimal_hypervisor_count(**kwargs)
+            self.results[
+                'min_h_count'] = self.network_operator.get_minimal_hypervisor_count(
+                    **kwargs)
+            return self.results['min_h_count']
 
     def modify_hypervisor_placement(self, **kwargs) -> None:
         return
@@ -383,8 +398,12 @@ class NetworkSimulation:
 
     @measure
     def setup_vSDN_requests(self, **kwargs) -> None:
-        self.accepted_vSDN_requests = self.network_operator.process_vSDN_requests(
-            request_list=self.vSDN_requests, **kwargs)
+        if self.settings['auto_accept']:
+            self.accepted_vSDN_requests = [True] * len(self.vSDN_requests)
+        else:
+            self.accepted_vSDN_requests = self.network_operator.process_vSDN_requests(
+                request_list=self.vSDN_requests, **kwargs)
+
         self.results['vSDN_accepted_count'] = sum(self.accepted_vSDN_requests)
         self.results['vSDN_acceptance_ratio'] = self.results[
             'vSDN_accepted_count'] / len(self.vSDN_requests)

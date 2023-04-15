@@ -81,7 +81,10 @@ data/*
 !data/processed/
 data/processed/*
 !data/processed/networks
-!data/processed/network_operators
+data/processed/network_operators/*
+
+results/*
+reports/*
 
 # Mac OS-specific storage files
 .DS_Store

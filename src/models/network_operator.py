@@ -159,14 +159,9 @@ class NetworkOperator:
                 kwargs,
                 network_operator=self,
             ))
-        # print(result)
-        # print(result['request status'])
-        # print(result['flexibility status'])
-        self.active_hypervisors = result.get('active hypervisors', None)
+
+        self.active_hypervisors = result.get('active_hypervisors', None)
         self.set_active_hypervisor_info()
-        # print("Active_hypervisors:", self.active_hypervisors)
-        self.info['hp_acceptance_ratio'] = result.get('hp acceptance ratio',
-                                                      None)
 
         if 'hypervisor assignment' in result:
             self.hypervisor_assignment = result.get('hypervisor assignment',
@@ -184,34 +179,44 @@ class NetworkOperator:
                  all_paths=self.possible_paths,
                  **dict(kwargs, max_length=self.info['max_length']))
 
+        for key in result:
+            if ' ' not in key:
+                self.info[key] = result[key]
+
         # if 'request status' in result:
         #     print(result.get('request status'))
         return
 
-    def evaluate_hypervisor_placement(self, active_hypervisors, request_list,
+    def evaluate_hypervisor_placement(self, hypervisor_placement, request_list,
                                       **kwargs):
-        self.active_hypervisors = active_hypervisors
-        (self.hypervisor_assignment, self.hypervisor_switch_control_paths
-         ) = gu.assign_switches_to_hypervisors(
-             S=self.nodes,
-             Tc=self.triplets_by_switches,
-             hypervisors=self.active_hypervisors,
-             main_controller=None,
-             Smc=[],
-             all_paths=self.possible_paths,
-             **kwargs)
-        self.set_active_hypervisor_info()
+        self.active_hypervisors = hypervisor_placement['active_hypervisors']
+        if 'hypervisor assignment' in hypervisor_placement:
+            self.hypervisor_assignment = hypervisor_placement.get(
+                'hypervisor assignment', None)
+            self.hypervisor_switch_control_paths = hypervisor_placement.get(
+                'hypervisor2switch control paths', None)
+        else:
+            (self.hypervisor_assignment, self.hypervisor_switch_control_paths
+             ) = gu.assign_switches_to_hypervisors(
+                 S=self.nodes,
+                 Tc=self.triplets_by_switches,
+                 hypervisors=self.active_hypervisors,
+                 main_controller=None,
+                 Smc=[],
+                 all_paths=self.possible_paths,
+                 **kwargs)
+            self.set_active_hypervisor_info()
         return self.preprocess_vSDN_requests(request_list)
 
     def get_minimal_hypervisor_count(self, **kwargs) -> int:
         result, _ = hypervisor_placement_solutions(
             **{
                 'hp_type': 'ilp',
-                'hp_objective': 'hypervisor count',
+                'hp_objectives': ('hypervisor_count', ),
                 'network_operator': self,
                 'hypervisor_capacity': kwargs.get('hypervisor_capacity', None)
             })
-        return len(result.get('active hypervisors', None))
+        return len(result.get('active_hypervisors', None))
 
     def get_hypervisor_switch_latencies(self):
         primary_paths, secondary_paths = [], []

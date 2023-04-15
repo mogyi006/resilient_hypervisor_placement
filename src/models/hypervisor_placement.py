@@ -1,9 +1,9 @@
 # Standard library imports.
 import itertools
-from collections import Counter
+import collections
 import concurrent.futures
 from copy import deepcopy
-from random import choice
+import random
 import logging
 
 # Related third party imports.
@@ -13,6 +13,9 @@ import numpy as np
 import src.data.graph_utilities as gu
 import src.models.ilp as ilp
 from src.logger import measure
+
+heuristics = {}
+heuristic = lambda f: heuristics.setdefault(f.__name__, f)
 
 
 # Get facility with maximal covering possibility
@@ -30,7 +33,7 @@ def get_facility_for_maxcover(C, C_covered, F, F_used, Tc):
         idx for idx, value in enumerate(covering) if value == max_covering
     ]
     if max_covering > currently_covering:
-        return set([F_notused[choice(max_indexes)]])
+        return set([F_notused[random.choice(max_indexes)]])
     else:
         return None
 
@@ -52,7 +55,7 @@ def get_facility_pair_for_maxcover(C, C_covered, F, F_used, Tc):
     ]
     # print("Before: ", currently_covering, "Possible: ", sorted(covering, reverse=True)[:5])
     if max_covering > currently_covering:
-        return set(F_notused[choice(max_indexes)])
+        return set(F_notused[random.choice(max_indexes)])
     else:
         return None
 
@@ -69,54 +72,26 @@ def minimize_cover(C, C_covered, F_used, Tc):
 
 # Greedy Path-Disjoint Cover
 # Minimizes the number of facilities
-def greedy(network_operator=None,
-           C=None,
-           F=None,
-           Tc=None,
-           Tf=None,
-           start_with_pair: bool = True,
-           **kwargs):
+@heuristic
+def greedy_max_cover(network_operator=None,
+                     C=None,
+                     F=None,
+                     Tc=None,
+                     k: int = None,
+                     start_with_pair: bool = True,
+                     end_with_pair: bool = True,
+                     **kwargs):
+
     if network_operator is not None and (C is None or F is None or Tc is None):
         C = network_operator.nodes
         F = network_operator.possible_hypervisors
         Tc = network_operator.triplets_by_switches
-        Tf = network_operator.triplets_by_hypervisors
-    elif C is None or F is None or Tc is None:
-        raise ValueError
 
-    F_ = set()
-    C_ = set()
-
-    if start_with_pair:
-        F_.update(get_facility_pair_for_maxcover(C, C_, F, F_, Tc))
-
-    while C != C_:
-        F_.update(get_facility_for_maxcover(C, C_, F, F_, Tc))
-        # print("Step 1:  ", F_)
-        C_ = gu.covered_customers(Tc, F_, C)
-        F_ = minimize_cover(C, C_, F_, Tc)
-        # print("Step 2:  ", F_)
-        # print("Covered: ", len(C_))
-    return F_
-
-
-def greedy_limited(network_operator=None,
-                   C=None,
-                   F=None,
-                   Tc=None,
-                   Tf=None,
-                   k: int = None,
-                   start_with_pair: bool = True,
-                   end_with_pair: bool = True,
-                   **kwargs):
     if k < 2 or k > len(C):
+        logging.error(
+            f"Maximal hypervisor number is not given.\nk must be between 2 and |C|={len(C)}"
+        )
         raise ValueError
-
-    if network_operator is not None and (C is None or F is None or Tc is None):
-        C = network_operator.nodes
-        F = network_operator.possible_hypervisors
-        Tc = network_operator.triplets_by_switches
-        Tf = network_operator.triplets_by_hypervisors
 
     F_ = set()
     C_ = set()
@@ -131,55 +106,9 @@ def greedy_limited(network_operator=None,
             F_.update(get_facility_for_maxcover(C, C_, F, F_, Tc))
             C_ = gu.covered_customers(Tc, F_, C)
             F_ = minimize_cover(C, C_, F_, Tc)
-    return F_
-
-
-def hp_multiple_greedy(repeat: int = 100, **kwargs):
-    solutions = [greedy_limited(**kwargs) for _ in range(repeat)]
-    print(f"No. Greedy Solutions: {len(solutions)}")
-
-    min_h_count = len(min(solutions, key=len))
-    min_solutions = list(
-        set(
-            frozenset(active_hypervisors) for active_hypervisors in solutions
-            if len(active_hypervisors) == min_h_count))
-    print(f"No. unique minimal Greedy Solutions: {len(min_solutions)}")
-    print(min_solutions)
-
-    network_operator = kwargs.get('network_operator', None)
-    request_list = kwargs.get('vSDN_requests', [])
-
-    futures = [None] * len(min_solutions)
-    accepted_counts = [0] * len(min_solutions)
-    with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
-        for i, active_hypervisors in enumerate(min_solutions):
-            future = executor.submit(
-                network_operator.evaluate_hypervisor_placement, **{
-                    'active_hypervisors': active_hypervisors,
-                    'request_list': request_list
-                })
-            futures[i] = future
-
-        for i, future in enumerate(futures):
-            accepted_counts[i] = sum(future.result())
-
-    # controllable_switches = [
-    #     gu.check_contoller_ability(solution, **kwargs) for solution in solutions
-    # ]
-
     return {
-        'active hypervisors':
-        min_solutions[accepted_counts.index(max(accepted_counts))],
-        'no. accepted':
-        max(accepted_counts)
+        'active_hypervisors': F_,
     }
-    # if optimize == 'hypervisor count':
-    # return {'active hypervisors': min(solutions, key=len)}
-    # elif optimize == 'max controlled':
-    #     most_options = [len(list(chain.from_iterable(switch_dict.values()))) for switch_dict in controllable_switches]
-    #     return solutions[most_options.index(max(most_options))]
-    # else:
-    #     return None
 
 
 def hp_main_controller(network_operator=None,
@@ -238,7 +167,7 @@ def hp_main_controller(network_operator=None,
             result['Tc'] = Ts
             result.update(placement_result)
 
-    print(f"No. active hypervisors: {result['active hypervisors']}")
+    print(f"No. active hypervisors: {result['active_hypervisors']}")
     return result
 
 
@@ -258,26 +187,27 @@ def hp_overall_coverage(network_operator=None,
         dict_ch = {}
         for c, h, h_, _ in Qs[s]:
             dict_ch.setdefault(c, []).append((h, h_))
-        hypervisor_pair_counts = Counter()
+        hypervisor_pair_counts = collections.Counter()
         for c in C:
-            hypervisor_pair_counts += Counter(dict_ch.get(c, []))
+            hypervisor_pair_counts += collections.Counter(dict_ch.get(c, []))
         dict_hypervisor_pair_counts[s] = hypervisor_pair_counts
 
     # max_count = max([max(counter.values()) for _,counter in dict_hypervisor_pair_counts.items()])
     # best_1st_hypervisors = [s for s,counter in dict_hypervisor_pair_counts.items() if counter.most_common(1)[0][1] == max_count]
-    best_1st_hypervisor_pair = sum(dict_hypervisor_pair_counts.values(),
-                                   start=Counter()).most_common(1)[0][0]
+    best_1st_hypervisor_pair = sum(
+        dict_hypervisor_pair_counts.values(),
+        start=collections.Counter()).most_common(1)[0][0]
 
     H_ = set(best_1st_hypervisor_pair)
     C_ = set()
 
     while set(S) != set(C_):
-        next_hypervisors = Counter()
+        next_hypervisors = collections.Counter()
         for s, counter_ in dict_hypervisor_pair_counts.items():
             if s in C_:
                 continue
 
-            hypervisors_for_switch = Counter()
+            hypervisors_for_switch = collections.Counter()
             for (h, h_), count in counter_.most_common():
                 if (h in H_ and h_ in H_):
                     C_.add(s)
@@ -291,17 +221,20 @@ def hp_overall_coverage(network_operator=None,
                     if h in hypervisors_for_switch:
                         continue
                     else:
-                        hypervisors_for_switch += Counter({h: count})
+                        hypervisors_for_switch += collections.Counter(
+                            {h: count})
                 elif h in H_ and h_ not in H_:
                     if h_ in hypervisors_for_switch:
                         continue
                     else:
-                        hypervisors_for_switch += Counter({h_: count})
+                        hypervisors_for_switch += collections.Counter(
+                            {h_: count})
                 elif h not in H_ and h_ in H_:
                     if h in hypervisors_for_switch:
                         continue
                     else:
-                        hypervisors_for_switch += Counter({h: count})
+                        hypervisors_for_switch += collections.Counter(
+                            {h: count})
                 else:
                     continue
             next_hypervisors += hypervisors_for_switch
@@ -342,7 +275,7 @@ def hp_overall_coverage(network_operator=None,
             return None
 
     result = {
-        'active hypervisors': set().union(*hypervisor_assignment.values()),
+        'active_hypervisors': set().union(*hypervisor_assignment.values()),
         'hypervisor assignment': hypervisor_assignment,
         'hypervisor2switch control paths': hypervisor2switch_control_paths
     }
@@ -350,10 +283,12 @@ def hp_overall_coverage(network_operator=None,
 
 
 def get_hypervisor_additional_switch_coverage(S, S_covered, H, H_used, Ts):
-    """Returns the additional switch coverage of a hypervisor."""
+    """Returns the additional switch coverage of each unused hypervisor."""
     H_notused = list(set(H) - set(H_used))
 
     if not H_used:
+        # if no hypervisor is used, the additional switch coverage is
+        # for all hypervisor pairs
         return {
             h: len(set().union(*[
                 set(gu.covered_customers(Ts, [h, h_], S)) for h_ in H_notused
@@ -401,32 +336,38 @@ def get_hypervisor_additional_request_coverage(S, C, H, H_used, Qhh, Qcs, R):
         return {h: 0 for h in H_notused}
 
     # RS_mask: masks out switches that are not used by a request
+    # True if a switch is used by a request
     RS_mask = np.zeros((len(R), len(C), len(S)), dtype=bool)
     for r_idx, request in enumerate(R):
         for s in request.get_switches():
             RS_mask[r_idx, :, S.index(s)] = True
 
-    # RCS_mask: masks out controller-switch pairs
-    # that can be used by a request
+    # RCS_mask: masks out controller-switch pairs that can be used by a request
+    # True if a controller-switch pair is possible
     RCS_mask = np.zeros((len(R), len(C), len(S)), dtype=bool)
-    # for r_idx, request in enumerate(R):
     for c_idx, c in enumerate(C):
         for s in S:
             if len(Qcs.get((c, s), [])):
                 RCS_mask[:, c_idx, S.index(s)] = True
+
+    # C_mask: masks out controllers unable to control all switches in a request
     C_mask = np.sum(np.logical_and(RCS_mask, RS_mask),
                     axis=2) == np.sum(RS_mask, axis=2)
+    # Removes controllers unable to control all switches in a request
     RCS_mask = np.logical_and(
         RCS_mask,
         np.logical_and(
             RS_mask, np.concatenate([C_mask[:, :, np.newaxis]] * len(S),
                                     axis=2)))
 
+    # CS_current: already possible controller-switch pairs
     CS_current = np.zeros((len(C), len(S)), dtype=bool)
     for h, h_ in itertools.product(H_used, H_used):
         for c, s in Qhh.get((h, h_), []):
             CS_current[C.index(c), S.index(s)] = True
 
+    # For each unused hypervisor, compute the additional controller-switch
+    # pairs that can be used
     additional_coverage = {h: 0 for h in H_notused}
     for h in H_notused:
         CS_new = np.zeros((len(C), len(S)), dtype=bool)
@@ -441,6 +382,20 @@ def get_hypervisor_additional_request_coverage(S, C, H, H_used, Qhh, Qcs, R):
     return additional_coverage
 
 
+def normalize_hypervisor_additional_coverage(additional_coverage):
+    """Normalizes the additional coverage of each hypervisor."""
+    if not additional_coverage:
+        return additional_coverage
+
+    max_value = max(max(additional_coverage.values()), 1)
+
+    return {
+        h: additional_coverage[h] / max_value
+        for h in additional_coverage.keys()
+    }
+
+
+@heuristic
 def hp_combined_S_CS(network_operator=None,
                      S=None,
                      H=None,
@@ -449,6 +404,7 @@ def hp_combined_S_CS(network_operator=None,
                      Qhh=None,
                      Ts=None,
                      n_hypervisors=None,
+                     heuristic_randomness=0.5,
                      **kwargs):
     """Greedy algorithm for the combined switch and controller placement problem."""
 
@@ -485,16 +441,21 @@ def hp_combined_S_CS(network_operator=None,
                       hypervisor_additional_controller_switch_coverage)
         logging.debug("Additional request coverage: %s",
                       hypervisor_additional_request_coverage)
+
+        # Normalize additional coverage
+        hypervisor_additional_switch_coverage = normalize_hypervisor_additional_coverage(
+            hypervisor_additional_switch_coverage)
+        hypervisor_additional_controller_switch_coverage = normalize_hypervisor_additional_coverage(
+            hypervisor_additional_controller_switch_coverage)
+        hypervisor_additional_request_coverage = normalize_hypervisor_additional_coverage(
+            hypervisor_additional_request_coverage)
+
         # Select subset of hypervisors with highest combined coverage
         combined_additional_coverage = {
-            h: hypervisor_additional_switch_coverage[h] +
-            max(1, max(hypervisor_additional_switch_coverage.values())) *
-            (hypervisor_additional_controller_switch_coverage[h] / max(
-                1,
-                max(hypervisor_additional_controller_switch_coverage.values()))
-             ) + max(1, max(hypervisor_additional_switch_coverage.values())) *
-            (hypervisor_additional_request_coverage[h] /
-             max(1, max(hypervisor_additional_request_coverage.values())))
+            h: (hypervisor_additional_switch_coverage[h] +
+                hypervisor_additional_controller_switch_coverage[h] +
+                hypervisor_additional_request_coverage[h] +
+                random.gauss(mu=0, sigma=heuristic_randomness))
             for h in hypervisor_additional_switch_coverage.keys()
         }
         logging.debug("Combined additional coverage: %s",
@@ -515,7 +476,7 @@ def hp_combined_S_CS(network_operator=None,
             S, C, H, H_used, Qhh, Qcs, R)
 
     return {
-        'active hypervisors': H_used,
+        'active_hypervisors': H_used,
         'hypervisor assignment': hypervisor_assignment(S, H_used, Qhh),
     }
 
@@ -523,7 +484,8 @@ def hp_combined_S_CS(network_operator=None,
 def hypervisor_assignment(S, H_used, Qhh):
     Q_counts = {}
     for h1, h2 in itertools.product(H_used, H_used):
-        Q_counts[(h1, h2)] = Counter([s for (c, s) in Qhh.get((h1, h2), [])])
+        Q_counts[(h1, h2)] = collections.Counter(
+            [s for (c, s) in Qhh.get((h1, h2), [])])
     logging.debug("Q_counts: %s", Q_counts)
 
     hypervisor_assignment = {
@@ -534,25 +496,65 @@ def hypervisor_assignment(S, H_used, Qhh):
     return hypervisor_assignment
 
 
+def heuristic_repeated(heuristic_name: str = None,
+                       repeat: int = 100,
+                       **kwargs):
+    solutions = [heuristics[heuristic_name](**kwargs) for _ in range(repeat)]
+    logging.info(f"No. Greedy Solutions: {len(solutions)}")
+
+    min_h_count = len(
+        min(solutions,
+            key=lambda x: len(x['active_hypervisors']))['active_hypervisors'])
+    min_solutions = list({
+        frozenset(solution['active_hypervisors']): solution
+        for solution in solutions
+        if len(solution['active_hypervisors']) == min_h_count
+    }.values())
+    logging.info(f"No. unique minimal Greedy Solutions: {len(min_solutions)}")
+    logging.debug(
+        f"Minimal Greedy Solutions: {[solution['active_hypervisors'] for solution in min_solutions]}"
+    )
+
+    network_operator = kwargs.get('network_operator', None)
+    request_list = kwargs.get('vSDN_requests', None)
+
+    if network_operator is None or request_list is None:
+        logging.error("No network operator or request list provided")
+        return None
+
+    futures = [None] * len(min_solutions)
+    accepted_counts = [0] * len(min_solutions)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
+        for i, solution in enumerate(min_solutions):
+            future = executor.submit(
+                network_operator.evaluate_hypervisor_placement, **{
+                    'hypervisor_placement': solution,
+                    'request_list': request_list
+                })
+            futures[i] = future
+
+        for i, future in enumerate(futures):
+            accepted_counts[i] = sum(future.result())
+
+    return min_solutions[accepted_counts.index(max(accepted_counts))]
+
+
 @measure
 def hypervisor_placement_solutions(hp_type: str = 'heuristics',
                                    hp_objective: str = 'hypervisor count',
                                    **kwargs):
     if hp_type == 'heuristics':
         if hp_objective == 'hypervisor count':
-            return hp_multiple_greedy(**kwargs)
+            return heuristic_repeated(heuristic_name='greedy_max_cover',
+                                      **kwargs)
         elif hp_objective == 'main controller':
             return hp_main_controller(**kwargs)
         elif hp_objective == 'overall coverage':
             return hp_overall_coverage(**kwargs)
         elif hp_objective == 'combined S CS':
-            return hp_combined_S_CS(**kwargs)
+            return heuristic_repeated(heuristic_name='hp_combined_S_CS',
+                                      **kwargs)
     elif hp_type == 'ilp':
-        if hp_objective == 'hypervisor count':
-            return ilp.lcrhpp_minh(**kwargs)
-        elif hp_objective == 'acceptance ratio':
-            return ilp.lcrhpp_maxa(**kwargs)
-        elif hp_objective == 'acceptance and flexibility':
-            return ilp.lcrhpp_max_af(**kwargs)
+        return ilp.lcrhpp(**kwargs)
 
     return None
