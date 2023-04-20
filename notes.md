@@ -59,10 +59,17 @@ Without constraints the best locations will be the same.
 - Max 1 hypervisor migration per timestep
 
 
+# Hypervisor Load
+- Hypervisor capacity as parameter
+- Secondary objective to minimize the max hypervisor load
+- Tradeoff between hypervisor and controller load
+
 # Results
 
 ## No. hypervisors
 - '../results/25_italy/static/tmp/2023-04-03-21-43-35/simulation-group-results.json'
+- '../results/25_italy/static/tmp/2023-04-16-14-16-49/simulation-group-results.json'
+
 - '../results/26_usa/static/tmp/2023-04-03-21-44-07/simulation-group-results.json'
 
 ## Hypervisor Capacity
@@ -75,14 +82,23 @@ Without constraints the best locations will be the same.
 - '../results/25_italy/static/tmp/2023-04-07-17-55-40/simulation-group-results.json'
 
 ## Heuristic
+Fine heatmap of IT-US networks
 
 ### Latency - 0.7
-- '../results/26_usa/static/tmp/2023-03-30-08-04-19/simulation-group-results.json'
 
 ### Latency - 0.6
-- '../results/25_italy/static/tmp/2023-03-29-16-57-50/simulation-group-results.json'
-- '../results/26_usa/static/tmp/2023-03-29-20-23-51/simulation-group-results.json'
-- '../results/37_cost/static/tmp/2023-03-29-21-25-50/simulation-group-results.json'
+IT
+    '../results/25_italy/static/tmp/2023-04-19-18-26-47/simulation-group-results.json', # 1-50
+    '../results/25_italy/static/tmp/2023-04-19-20-20-18/simulation-group-results.json', # 100-400
+
+    '../results/25_italy/static/tmp/2023-04-19-20-38-09/simulation-group-results.json', # FULL
+
+US
+    '../results/26_usa/static/tmp/2023-04-15-16-41-05/simulation-group-results.json', # 1-100
+    '../results/26_usa/static/tmp/2023-04-16-10-54-03/simulation-group-results.json', # 200, 400
+    '../results/26_usa/static/tmp/2023-04-19-18-38-31/simulation-group-results.json', # 0.3, 0.5
+    '../results/26_usa/static/tmp/2023-04-16-11-00-13/simulation-group-results.json' # ILP
+
+    '../results/26_usa/static/tmp/2023-04-19-20-39-58/simulation-group-results.json', # FULL
 
 ### Latency - 0.5
-- '../results/25_italy/static/tmp/2023-03-30-08-03-55/simulation-group-results.json'

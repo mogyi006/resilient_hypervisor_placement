@@ -32,6 +32,9 @@ def QoS(vSDN_request=None):
 
 
 @vSDN_metric
-def revenue(vSDN_request=None):
-    return (vSDN_request.get_size() * vSDN_request.get_TTL() *
-            vSDN_request.get_QoS())
+def revenue(vSDN_request=None, one_timestep=False, **kwargs):
+    if one_timestep:
+        return vSDN_request.get_size() * vSDN_request.get_QoS()
+    else:
+        return (vSDN_request.get_size() * vSDN_request.get_TTL() *
+                vSDN_request.get_QoS())

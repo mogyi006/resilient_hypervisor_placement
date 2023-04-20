@@ -13,8 +13,9 @@ from src.logger import measure
 import src.data.routing as routing
 import src.data.graph_utilities as gu
 from src.models.hypervisor_placement import hypervisor_placement_solutions
-from src.models import vSDN_request
+from src.models import vSDN_request, metrics
 import src.models.controller_placement as controller_placement
+
 
 
 # Network operator class
@@ -81,6 +82,18 @@ class NetworkOperator:
 
     def get_active_vSDN_count(self):
         return sum([vSDN.is_active() for _, vSDN in self.vSDNs.items()])
+
+    def get_switch_load_total(self):
+        return sum([
+            vSDN.get_size() for _, vSDN in self.vSDNs.items()
+            if vSDN.is_active()
+        ])
+
+    def get_revenue_total(self, **kwargs):
+        return sum([
+            metrics.revenue(vSDN, **kwargs) for _, vSDN in self.vSDNs.items()
+            if vSDN.is_active()
+        ])
 
     #@measure
     def construct_possible_paths(self, **kwargs):

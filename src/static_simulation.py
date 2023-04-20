@@ -20,7 +20,7 @@ logging.basicConfig(
 
 networks = [('25_italy', 25), ('26_usa', 26), ('37_cost', 37),
             ('50_germany', 50)]
-network_name, max_vSDN_size = networks[0]
+network_name, max_vSDN_size = networks[1]
 
 simulation_group_id = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 simulation_group_folder = f"../results/{network_name}/static/tmp/{simulation_group_id}/"
@@ -34,29 +34,31 @@ hp_possibilities = {
     'ilpa': ('ilp', 'acceptance ratio'),
     'ilpaf': ('ilp', 'acceptance and flexibility'),
 }
-static_type = 'ilpa'
+static_type = 'heu_scs'
 hp_type, hp_objective = hp_possibilities[static_type]
+
+hp_objective_list = (
+    'acceptance_ratio',
+    # 'hypervisor_load',
+    # 'controller_load_request',
+    # 'controller_load_switch',
+)
 
 hp_algo_settings = {
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],
-    'hp_objectives': [(
-        # 'hypervisor_count',
-        'acceptance_ratio',
-        # 'utilized_switches',
-        # 'total_QoS',
-        # 'total_revenue',
-        'hypervisor_load',
-        # 'controller_load_request',
-        # 'controller_load_switch',
-    )],
-    'repeat': [1],
+    'hp_objectives': [
+        hp_obj for hp_obj in itertools.permutations(hp_objective_list)
+        if hp_obj[0] == 'acceptance_ratio'
+    ],
     'n_extra_hypervisors': [0],
     'hypervisor_capacity': [None],
-    'controller_capacity': [10, 20, 30, 40, 50],
+    'controller_capacity': [None],
     'n_diff_hypervisors': [0],
     'flexibility_weight': [None],
-    'heuristic_randomness': [0],
+    'repeat': [1, 10, 20, 50, 100, 200, 400],
+    'heuristic_randomness':
+    np.linspace(0, 1, 11),
 }
 
 simulation_settings = {
@@ -66,9 +68,9 @@ simulation_settings = {
     'latency_factor': [0.6],
     'shortest_k': [16],
     'static_type': [static_type],
-    'sim_repeat': [5],
+    'sim_repeat': [10],
     'max_request_size': [max(2, int(max_vSDN_size * 0.75))],
-    'vSDN_count_ilp': [200],
+    'vSDN_count_ilp': [1000],
     'vSDN_size_ilp': [max(2, int(max_vSDN_size * 0.75))],
 }
 
@@ -81,7 +83,7 @@ setting_generator = [
 
 possible_request_settings = {
     'request_size': np.arange(max_vSDN_size, 1, -1),
-    'count': [500]
+    'count': [1000]
 }
 
 logging.info(f"\n'{simulation_group_folder}simulation-group-results.json'\n")

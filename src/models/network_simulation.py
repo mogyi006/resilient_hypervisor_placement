@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 
-def generate_setting_list(setting_dict: dict = None) -> list:
+def generate_setting_list(setting_dict: dict) -> list:
     if setting_dict is None:
         raise ValueError
     param_names = list(setting_dict.keys())
@@ -205,6 +205,7 @@ class NetworkSimulation:
 
         for _ in range(self.settings['simulation_timesteps']):
             self.next_timestep(**kwargs)
+            self.timestep_statistics()
             _ = self.log_simulation()
 
         self.deactivate_vSDNs(all=True)
@@ -246,6 +247,7 @@ class NetworkSimulation:
             self.results['hp_changed'] = len(new_placement - current_placement)
             # print(f"Current: {current_placement}\nNew: {new_placement}")
             self.setup_vSDN_requests()
+            self.timestep_statistics()
             _ = self.log_simulation()
 
         self.deactivate_vSDNs(all=True)
@@ -284,6 +286,7 @@ class NetworkSimulation:
             self.results['hp_changed'] = len(new_placement - current_placement)
             # print(f"Current: {current_placement}\nNew: {new_placement}")
             self.setup_vSDN_requests(time=self.results['timestep'])
+            self.timestep_statistics()
             _ = self.log_simulation()
 
         self.deactivate_vSDNs(all=True)
@@ -441,6 +444,17 @@ class NetworkSimulation:
 
     def get_vSDN_request_count(self):
         return len(self.get_vSDN_requests())
+
+    def timestep_statistics(self):
+        self.results[
+            't_n_active_vSDNs'] = self.network_operator.get_active_vSDN_count(
+            )
+        self.results[
+            't_switch_load_total'] = self.network_operator.get_switch_load_total(
+            )
+        self.results[
+            't_revenue_total'] = self.network_operator.get_revenue_total(
+                one_timestep=True)
 
     # def get_dynamic_simulation_name(self):
     #     return f"L{int(100*self.network_operator.get_latency_factor())}"
