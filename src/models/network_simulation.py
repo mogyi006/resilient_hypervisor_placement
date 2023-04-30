@@ -230,18 +230,23 @@ class NetworkSimulation:
             all_acceptable = (self.results['timestep'] > 1) and (np.sum(
                 self.preprocess_vSDN_requests(
                 )) == self.get_vSDN_request_count())
-            current_placement = set(
-                self.network_operator.get_active_hypervisors())
+            if self.results['timestep'] == 1:
+                current_placement = set()
+            else:
+                current_placement = set(
+                    self.network_operator.get_active_hypervisors())
 
             if not all_acceptable:
-                self.hypervisor_placement(
-                    **dict(kwargs,
-                           vSDN_requests_ilp=(
-                               self.vSDN_requests +
-                               self.network_operator.get_active_vSDNs()),
-                           required_vSDN_requests=self.network_operator.
-                           get_active_vSDNs(only_ids=True),
-                           n_hypervisors=self.get_minimal_hypervisor_count()))
+                self.hypervisor_placement(**dict(
+                    kwargs,
+                    vSDN_requests_ilp=(
+                        self.vSDN_requests +
+                        self.network_operator.get_active_vSDNs()),
+                    required_vSDN_requests=self.network_operator.
+                    get_active_vSDNs(only_ids=True),
+                    n_hypervisors=self.get_minimal_hypervisor_count(),
+                    prev_active_hypervisors=current_placement,
+                ))
 
             new_placement = set(self.network_operator.get_active_hypervisors())
             self.results['hp_changed'] = len(new_placement - current_placement)
@@ -298,7 +303,7 @@ class NetworkSimulation:
                                          **kwargs) -> None:
         self.delete_logs()
         self.settings['simulation_type'] = 'dynamic'
-        self.sim_dynamic_type = dynamic_type
+        self.settings['sim_dynamic_type'] = dynamic_type
         self.results['min_h_count'] = self.get_minimal_hypervisor_count(
             recalculate=True, **kwargs)
 

@@ -1,6 +1,7 @@
 # Standard library imports.
 import itertools
 import logging
+import collections
 
 # Related third party imports.
 import gurobipy as gp
@@ -130,6 +131,8 @@ def lcrhpp(network_operator,
            hypervisor_capacity: float = None,
            controller_capacity: float = None,
            required_vSDN_requests=None,
+           prev_active_hypervisors: list = None,
+           n_possible_changes: int = None,
            **kwargs):
     logging.info('Starting ILP with the following parameters:')
     if vSDN_requests is None:
@@ -205,6 +208,12 @@ def lcrhpp(network_operator,
             gp.LinExpr([(1, hypervisor_controls_switch[(h, s)])
                         for h in H]) == 2 for s in S)
         # c_2b = model.addConstrs(gp.quicksum([hypervisor_pair_controls_switch[((h1,h2),s)] for h1,h2 in H_pairs]) == 1 for s in S)
+
+        if prev_active_hypervisors and n_possible_changes is not None:
+            c_2c = model.addConstr(
+                gp.quicksum([
+                    active_hypervisors[h] for h in prev_active_hypervisors
+                ]) >= len(prev_active_hypervisors) - n_possible_changes)
 
         # The hypervisor pair controls the switch if both of them are controlling it
         c_3 = model.addConstrs(hypervisor_pair_controls_switch[((
@@ -309,6 +318,12 @@ def lcrhpp(network_operator,
         else:
             controller_capacity = min(int(controller_capacity * len(R)),
                                       len(R))
+
+        if required_vSDN_requests:
+            controller_capacity = max(
+                collections.Counter([
+                    R[r].get_controller() for r in required_vSDN_requests
+                ]).most_common(1)[0][1], controller_capacity)
 
         c_11a = model.addConstrs(
             load_dict['controller_load_request'][c] == gp.quicksum(
