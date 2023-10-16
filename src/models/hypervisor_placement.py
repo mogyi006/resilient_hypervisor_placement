@@ -87,11 +87,15 @@ def greedy_max_cover(network_operator=None,
         F = network_operator.possible_hypervisors
         Tc = network_operator.triplets_by_switches
 
-    if k < 2 or k > len(C):
-        logging.error(
-            f"Maximal hypervisor number is not given.\nk must be between 2 and |C|={len(C)}"
-        )
-        raise ValueError
+    # if k is not None and k < 2 or k > len(C) and 'n_hypervisors' not in kwargs:
+    #     logging.error(
+    #         f"Maximal hypervisor number is not given.\nk must be between 2 and |C|={len(C)}"
+    #     )
+    #     raise ValueError
+    if 'n_hypervisors' in kwargs:
+        k = kwargs['n_hypervisors']
+    else:
+        k = len(C)
 
     F_ = set()
     C_ = set()
@@ -498,6 +502,7 @@ def hypervisor_assignment(S, H_used, Qhh):
 
 def heuristic_repeated(heuristic_name: str = None,
                        repeat: int = 100,
+                       candidate_selection: str = 'random',
                        **kwargs):
     solutions = [heuristics[heuristic_name](**kwargs) for _ in range(repeat)]
     logging.info(f"No. Greedy Solutions: {len(solutions)}")
@@ -522,21 +527,27 @@ def heuristic_repeated(heuristic_name: str = None,
         logging.error("No network operator or request list provided")
         return None
 
-    futures = [None] * len(min_solutions)
-    accepted_counts = [0] * len(min_solutions)
-    with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
-        for i, solution in enumerate(min_solutions):
-            future = executor.submit(
-                network_operator.evaluate_hypervisor_placement, **{
-                    'hypervisor_placement': solution,
-                    'request_list': request_list
-                })
-            futures[i] = future
+    if candidate_selection == 'random':
+        return random.choice(min_solutions)
+    elif candidate_selection == 'acceptance_ratio':
+        futures = [None] * len(min_solutions)
+        accepted_counts = [0] * len(min_solutions)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
+            for i, solution in enumerate(min_solutions):
+                future = executor.submit(
+                    network_operator.evaluate_hypervisor_placement, **{
+                        'hypervisor_placement': solution,
+                        'request_list': request_list
+                    })
+                futures[i] = future
 
-        for i, future in enumerate(futures):
-            accepted_counts[i] = sum(future.result())
+            for i, future in enumerate(futures):
+                accepted_counts[i] = sum(future.result())
 
-    return min_solutions[accepted_counts.index(max(accepted_counts))]
+        return min_solutions[accepted_counts.index(max(accepted_counts))]
+    else:
+        logging.error("Unknown candidate selection method")
+        return None
 
 
 @measure

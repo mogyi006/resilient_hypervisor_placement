@@ -14,13 +14,13 @@ import src.logger as logger
 
 logging.basicConfig(
     format="[%(funcName)30s()] %(message)s",
-    level=logging.DEBUG,
+    level=logging.INFO,
     force=True,
 )
 
 networks = [('25_italy', 25), ('26_usa', 26), ('37_cost', 37),
             ('50_germany', 50)]
-network_name, max_vSDN_size = networks[1]
+network_name, max_vSDN_size = networks[0]
 
 simulation_group_id = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 simulation_group_folder = f"../results/{network_name}/static/tmp/{simulation_group_id}/"
@@ -48,29 +48,30 @@ hp_algo_settings = {
     'hp_type': [hp_type],
     'hp_objective': [hp_objective],
     'hp_objectives': [
-        hp_obj for hp_obj in itertools.permutations(hp_objective_list)
-        if hp_obj[0] == 'acceptance_ratio'
+        hp_objective_list
+        # hp_obj for hp_obj in itertools.permutations(hp_objective_list)
+        # if hp_obj[0] == 'acceptance_ratio'
     ],
-    'n_extra_hypervisors': [0],
+    'candidate_selection': ['random', 'acceptance_ratio'],
+    'n_extra_hypervisors': [0, 1, 2],
     'hypervisor_capacity': [None],
     'controller_capacity': [None],
     'n_diff_hypervisors': [0],
     'flexibility_weight': [None],
-    'repeat': [1, 10, 20, 50, 100, 200, 400],
-    'heuristic_randomness':
-    np.linspace(0, 1, 11),
+    'repeat': [50],
+    'heuristic_randomness': [0.1],
 }
 
 simulation_settings = {
     'simulation_group_id': [simulation_group_id],
     'simulation_group_folder': [simulation_group_folder],
     'network_name': [network_name],
-    'latency_factor': [0.6],
+    'latency_factor': [0.5],
     'shortest_k': [16],
     'static_type': [static_type],
-    'sim_repeat': [10],
+    'sim_repeat': [5],
     'max_request_size': [max(2, int(max_vSDN_size * 0.75))],
-    'vSDN_count_ilp': [1000],
+    'vSDN_count_ilp': [50],
     'vSDN_size_ilp': [max(2, int(max_vSDN_size * 0.75))],
 }
 
@@ -83,7 +84,7 @@ setting_generator = [
 
 possible_request_settings = {
     'request_size': np.arange(max_vSDN_size, 1, -1),
-    'count': [1000]
+    'count': [100]
 }
 
 logging.info(f"\n'{simulation_group_folder}simulation-group-results.json'\n")
