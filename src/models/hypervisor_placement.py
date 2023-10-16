@@ -77,7 +77,7 @@ def greedy_max_cover(network_operator=None,
                      C=None,
                      F=None,
                      Tc=None,
-                     k: int = None,
+                     n_hypervisors: int = None,
                      start_with_pair: bool = True,
                      end_with_pair: bool = True,
                      **kwargs):
@@ -103,8 +103,8 @@ def greedy_max_cover(network_operator=None,
     if start_with_pair:
         F_.update(get_facility_pair_for_maxcover(C, C_, F, F_, Tc))
 
-    while len(F_) < k and C != C_:
-        if end_with_pair and len(F_) == k - 2:
+    while len(F_) < n_hypervisors and C != C_:
+        if end_with_pair and len(F_) == n_hypervisors - 2:
             F_.update(get_facility_pair_for_maxcover(C, C_, F, F_, Tc))
         else:
             F_.update(get_facility_for_maxcover(C, C_, F, F_, Tc))
@@ -523,13 +523,17 @@ def heuristic_repeated(heuristic_name: str = None,
     network_operator = kwargs.get('network_operator', None)
     request_list = kwargs.get('vSDN_requests', None)
 
-    if network_operator is None or request_list is None:
-        logging.error("No network operator or request list provided")
+    if candidate_selection == 'random':
+        selected_solution = np.random.choice(min_solutions)
+        logging.info(
+            f"Selected solution ({candidate_selection}): {selected_solution}")
+        return selected_solution
+
+    elif network_operator is None or request_list is None:
+        logging.warning("No network operator or request list provided")
         return None
 
-    if candidate_selection == 'random':
-        return random.choice(min_solutions)
-    elif candidate_selection == 'acceptance_ratio':
+    elif candidate_selection == 'acceptance':
         futures = [None] * len(min_solutions)
         accepted_counts = [0] * len(min_solutions)
         with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
@@ -544,9 +548,14 @@ def heuristic_repeated(heuristic_name: str = None,
             for i, future in enumerate(futures):
                 accepted_counts[i] = sum(future.result())
 
-        return min_solutions[accepted_counts.index(max(accepted_counts))]
+        selected_solution = min_solutions[accepted_counts.index(
+            max(accepted_counts))]
+        logging.info(
+            f"Selected solution ({candidate_selection}): {selected_solution}")
+        return selected_solution
+
     else:
-        logging.error("Unknown candidate selection method")
+        logging.warning(f"Unknown candidate selection: {candidate_selection}")
         return None
 
 
