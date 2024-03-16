@@ -14,6 +14,7 @@ import numpy as np
 from src.models import network_operator
 from src.models import vSDN_request
 from src.logger import measure, save2json
+from src.models import gnn
 
 logging.basicConfig(
     format="[%(funcName)30s()] %(message)s",
@@ -80,19 +81,30 @@ class NetworkSimulation:
         network_operator_path = self.get_network_operator_path(**kwargs)
         return network_operator_path.is_file()
 
+    def is_network_operator_file_outdated(self, **kwargs) -> bool:
+        network_operator_path = self.get_network_operator_path(**kwargs)
+        if not self.is_network_operator_file_available(**kwargs):
+            return True
+        else:
+            return os.path.getmtime(
+                network_operator_path) < os.path.getmtime(
+                    "../src/models/network_operator.py")
+
     def init_network_operator(self, **kwargs) -> None:
         network_operator_path = self.get_network_operator_path(**kwargs)
-        if self.is_network_operator_file_available(**kwargs):
+        if not self.is_network_operator_file_outdated(**kwargs):
+            logging.info("Loading network operator...")
             self.network_operator = pickle.load(
                 open(network_operator_path, "rb"))
         else:
+            logging.info("Creating network operator...")
             self.network_operator = network_operator.NetworkOperator(
                 path=self.settings['network_path'])
         return
 
     def save_network_operator(self, **kwargs) -> None:
         network_operator_path = self.get_network_operator_path(**kwargs)
-        if not self.is_network_operator_file_available(**kwargs):
+        if self.is_network_operator_file_outdated(**kwargs):
             self.save2pickle(network_operator_path, self.network_operator)
         return
 
@@ -109,7 +121,7 @@ class NetworkSimulation:
         return
 
     def init_simulation(self, **kwargs) -> None:
-        if not self.is_network_operator_file_available(**kwargs):
+        if self.is_network_operator_file_outdated(**kwargs):
             self.network_operator.set_max_length(**kwargs)
             self.network_operator.set_shortest_k(**kwargs)
             self.network_operator.control_path_calculation(**kwargs)
@@ -118,11 +130,14 @@ class NetworkSimulation:
 
     def run_static_simulation(self,
                               possible_request_settings: dict = None,
+                              skip_evaluation: bool = False,
                               **kwargs) -> None:
         self.delete_all_vSDNs()
         request_setting_list = generate_setting_list(possible_request_settings)
 
         self.hypervisor_placement(**kwargs)
+        if skip_evaluation:
+            return
         for request_setting in request_setting_list:
             self.run_static_request_simulation(**request_setting)
             _ = self.log_simulation()
@@ -151,7 +166,7 @@ class NetworkSimulation:
             self.hypervisor_placement(
                 **{
                     'hp_type': 'ilp',
-                    'hp_objective': 'acceptance ratio',
+                    'hp_objectives': ('acceptance_ratio',),
                     'vSDN_requests_ilp': self.vSDN_requests,
                     'n_hypervisors': self.get_minimal_hypervisor_count(),
                 })
@@ -164,19 +179,26 @@ class NetworkSimulation:
     def run_multiple_static_simulation(self,
                                        sim_repeat: int = 10,
                                        static_type: str = 'basic',
+                                       generate_dgl: bool = False,
                                        **kwargs) -> None:
         self.delete_logs()
         self.settings['simulation_type'] = 'static'
         self.settings['sim_static_type'] = static_type
         self.results['min_h_count'] = self.get_minimal_hypervisor_count(
             recalculate=True, **kwargs)
+        self.dgl_graphs = []
 
         for sim_id in range(sim_repeat):
             self.results['simulation_round'] = sim_id
             if static_type == 'opt':
                 self.run_optimal_static_simulation(**kwargs)
             else:
-                self.run_static_simulation(**kwargs)
+                if generate_dgl:
+                    self.run_static_simulation(skip_evaluation=True, **kwargs)
+                    self.dgl_graphs.append(
+                        gnn.create_dgl_graph(self))
+                else:
+                    self.run_static_simulation(**kwargs)
         return
 
     def run_static_request_simulation(self,
@@ -354,7 +376,8 @@ class NetworkSimulation:
             vSDN_requests=self.get_vSDN_requests_ilp(**kwargs),
             n_hypervisors=(kwargs.get(
                 'n_hypervisors', self.get_minimal_hypervisor_count(**kwargs)) +
-                           kwargs.get('n_extra_hypervisors', 0))))
+                           kwargs.get('n_extra_hypervisors', 0)),
+            network_simulation=self,))
         return
 
     def get_minimal_hypervisor_count(self,
@@ -393,10 +416,11 @@ class NetworkSimulation:
         if kwargs.get('vSDN_requests_ilp', None) is None:
             self.settings['vSDN_count_ilp'] = vSDN_count_ilp
             self.settings['vSDN_max_size_ilp'] = vSDN_size_ilp
-            return self.request_generator_representative.get_random_vSDN_requests(
+            self.vSDN_requests_ilp = self.request_generator_representative.get_random_vSDN_requests(
                 max_request_size=vSDN_size_ilp,
                 total_count=vSDN_count_ilp,
                 time_=self.results['timestep'])
+            return self.vSDN_requests_ilp
         else:
             return kwargs.get('vSDN_requests_ilp', None)
 

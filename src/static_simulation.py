@@ -33,8 +33,11 @@ hp_possibilities = {
     'ilpk': ('ilp', 'hypervisor count'),
     'ilpa': ('ilp', 'acceptance ratio'),
     'ilpaf': ('ilp', 'acceptance and flexibility'),
+    'gnn': ('gnn', 'acceptance ratio'),
+    'gnn_ilp': ('gnn_ilp', 'acceptance ratio'),
+    'gnn_heu': ('gnn_heuristic', 'acceptance ratio'),
 }
-static_type = 'heu_scs'
+static_type = 'gnn_heu'
 hp_type, hp_objective = hp_possibilities[static_type]
 
 hp_objective_list = (
@@ -52,14 +55,16 @@ hp_algo_settings = {
         # hp_obj for hp_obj in itertools.permutations(hp_objective_list)
         # if hp_obj[0] == 'acceptance_ratio'
     ],
-    'candidate_selection': ['random', 'acceptance_ratio'],
-    'n_extra_hypervisors': [0, 1, 2],
+    'candidate_selection': ['acceptance'],
+    'n_extra_hypervisors': [0],
     'hypervisor_capacity': [None],
     'controller_capacity': [None],
     'n_diff_hypervisors': [0],
     'flexibility_weight': [None],
-    'repeat': [50],
-    'heuristic_randomness': [0.1],
+    'repeat': [10],
+    'heuristic_randomness': [0.2],
+    'path2model': ['../models/'],
+    'model_name': ['gnn_model_italy_0.5_2000'],
 }
 
 simulation_settings = {
@@ -69,9 +74,9 @@ simulation_settings = {
     'latency_factor': [0.5],
     'shortest_k': [16],
     'static_type': [static_type],
-    'sim_repeat': [5],
+    'sim_repeat': [10],
     'max_request_size': [max(2, int(max_vSDN_size * 0.75))],
-    'vSDN_count_ilp': [50],
+    'vSDN_count_ilp': [200],
     'vSDN_size_ilp': [max(2, int(max_vSDN_size * 0.75))],
 }
 
@@ -84,7 +89,7 @@ setting_generator = [
 
 possible_request_settings = {
     'request_size': np.arange(max_vSDN_size, 1, -1),
-    'count': [100]
+    'count': [400],
 }
 
 logging.info(f"\n'{simulation_group_folder}simulation-group-results.json'\n")

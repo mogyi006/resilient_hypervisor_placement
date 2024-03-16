@@ -6,7 +6,6 @@ import collections
 # Related third party imports.
 import gurobipy as gp
 from gurobipy import GRB
-env = gp.Env()
 
 # Local application/library specific imports.
 import src.models.metrics as metrics
@@ -72,7 +71,7 @@ def lcrhpp_minh(network_operator=None,
         c_4 = model.addConstrs(
             gp.quicksum([
                 hypervisor_pair_controls_switch[((h1, h2), s)]
-                for h1, h2 in allowed_switch_H_pairs[s]
+                for h1, h2 in allowed_switch_H_pairs[s] if h1 in H and h2 in H
             ]) == 1 for s in S)
 
         # Each hypervisor can control at most 'hypervisor_capacity' switches
@@ -124,13 +123,13 @@ def lcrhpp_minh(network_operator=None,
 
 def lcrhpp(network_operator,
            hp_objectives: tuple = ('hypervisor_count', ),
-           vSDN_requests=None,
+           vSDN_requests = None,
            n_hypervisors: int = None,
            n_diff_hypervisors: int = 0,
            flexibility_weight: float = None,
            hypervisor_capacity: float = None,
            controller_capacity: float = None,
-           required_vSDN_requests=None,
+           required_vSDN_requests = None,
            prev_active_hypervisors: list = None,
            n_possible_changes: int = None,
            **kwargs):
@@ -157,11 +156,25 @@ def lcrhpp(network_operator,
     R = {r.get_id(): r for r in vSDN_requests}
     CR_pairs = list(itertools.product(C, R.keys()))
 
-    allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(
-        get_all=True)
+    allowed_switch_H_pairs = network_operator.get_allowed_hypervisor_pairs_by_switch(get_all=True)
+    for switch, pairs in allowed_switch_H_pairs.items():
+        allowed_switch_H_pairs[switch] = []
+        for pair in pairs:
+            if pair in H_pairs:
+                allowed_switch_H_pairs[switch].append(pair)
+            elif (pair[1], pair[0]) in H_pairs:
+                allowed_switch_H_pairs[switch].append((pair[1], pair[0]))
     allowed_cs_H_pairs = network_operator.quartets_by_cs
+    for cs, pairs in allowed_cs_H_pairs.items():
+        allowed_cs_H_pairs[cs] = []
+        for pair in pairs:
+            if pair in H_pairs:
+                allowed_cs_H_pairs[cs].append(pair)
+            elif (pair[1], pair[0]) in H_pairs:
+                allowed_cs_H_pairs[cs].append((pair[1], pair[0]))
 
-    with gp.Model(env=env) as model:
+    with gp.Env() as env, gp.Model(env=env) as model:
+        model.setParam('OutputFlag', 0)
         # ! Primary ILP
         active_hypervisors = model.addVars(H, vtype=GRB.BINARY)
         hypervisor_controls_switch = model.addVars(HS_pairs, vtype=GRB.BINARY)
@@ -200,12 +213,11 @@ def lcrhpp(network_operator,
         # Each switch is controlled by a pair of hypervisors
         # Except when there is a hypervisor at the switch’s location
         c_2a = model.addConstrs(
-            active_hypervisors[s] <= hypervisor_controls_switch[(s, s)]
-            for s in S)
+            active_hypervisors[h] <= hypervisor_controls_switch[(h, h)]
+            for h in H)
         # c_2a = model.addConstrs(active_hypervisors[s] <= hypervisor_pair_controls_switch[((s,s),s)] for s in S)
         c_2b = model.addConstrs(
-            hypervisor_controls_switch[(s, s)] +
-            gp.LinExpr([(1, hypervisor_controls_switch[(h, s)])
+            gp.LinExpr([(1, hypervisor_controls_switch[(h, s)]) if h != s else (2, hypervisor_controls_switch[(h, s)])
                         for h in H]) == 2 for s in S)
         # c_2b = model.addConstrs(gp.quicksum([hypervisor_pair_controls_switch[((h1,h2),s)] for h1,h2 in H_pairs]) == 1 for s in S)
 
@@ -384,7 +396,7 @@ def lcrhpp(network_operator,
             c_4 = model.addConstrs(
                 gp.quicksum([
                     hypervisor_pair_controls_switch_2[((h1, h2), s)]
-                    for h1, h2 in allowed_switch_H_pairs[s]
+                    for h1, h2 in allowed_switch_H_pairs[s] if h1 in H and h2 in H
                 ]) == 1 for s in S)
 
             # Each hypervisor can control at most 'hypervisor_capacity' switches
@@ -402,7 +414,7 @@ def lcrhpp(network_operator,
             c_7 = model.addConstrs(
                 controller_controls_switch_2[(c, s)] == gp.or_([
                     hypervisor_pair_controls_switch_2[((h1, h2), s)]
-                    for h1, h2 in allowed_cs_H_pairs.get((c, s), [])
+                    for h1, h2 in allowed_cs_H_pairs.get((c, s), []) if h1 in H and h2 in H
                 ]) for c, s in CS_pairs)
 
             # The request can be accepted with the controller if it can control all of its switches
@@ -502,6 +514,9 @@ def lcrhpp(network_operator,
         model.optimize()
 
         logging.info("Optimization finished.")
+        logging.info(f"Solution status: {model.Status}")
+
+        logging.info(f"Active hypervisors: {active_hypervisors}")
 
         result = {
             'active_hypervisors':

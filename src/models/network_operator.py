@@ -2,6 +2,7 @@
 import random
 import copy
 from typing import List
+import logging
 
 # Related third party imports.
 import numpy as np
@@ -46,6 +47,8 @@ class NetworkOperator:
 
         self.vSDNs = {}
         self.vSDN_control_paths = {}
+
+        self.features = {}
 
     def __getattribute__(self, name: str):
         return object.__getattribute__(self, name)
@@ -124,6 +127,60 @@ class NetworkOperator:
              max_length=self.info['max_length'])
         self.info['n_quartets'] = len(self.quartets)
         return
+    
+    # - the number of quartets that contain the node as hypervisor
+    def calculate_hQ_values(self):
+        """Calculate the number of quartets that contain the node as hypervisor."""
+        hQ_values = np.zeros(len(self.nodes))
+        for h_pair, cs_pairs in self.quartets_by_hh.items():
+            hQ_values[h_pair[0]] += len(cs_pairs)
+            hQ_values[h_pair[1]] += len(cs_pairs)
+
+        self.features['hQ_values'] = hQ_values
+        return
+    
+    def calculate_cQ_values(self):
+        """Calculate the number of quartets that contain the node as controller."""
+        cQ_values = [
+            len(self.quartets_by_controllers[node])
+            for node in self.nodes
+        ]
+        self.features['cQ_values'] = np.array(cQ_values)
+        return
+    
+    def calculate_sQ_values(self):
+        """Calculate the number of quartets that contain the node as switch."""
+        sQ_values = [
+            len(self.quartets_by_switches[node])
+            for node in self.nodes
+        ]
+        self.features['sQ_values'] = np.array(sQ_values)
+        return
+    
+    def calculate_node_metrics(self):
+        betweenness_centrality = nx.betweenness_centrality(self.graph)
+        closeness_centrality = nx.closeness_centrality(self.graph)
+        degree_centrality = nx.degree_centrality(self.graph)
+        clustering_coefficient = nx.clustering(self.graph)
+
+        betweenness_centrality = np.array(list(betweenness_centrality.values()))
+        closeness_centrality = np.array(list(closeness_centrality.values()))
+        degree_centrality = np.array(list(degree_centrality.values()))
+        clustering_coefficient = np.array(list(clustering_coefficient.values()))
+
+        self.features['betweenness_centrality'] = betweenness_centrality
+        self.features['closeness_centrality'] = closeness_centrality
+        self.features['degree_centrality'] = degree_centrality
+        self.features['clustering_coefficient'] = clustering_coefficient
+        return
+
+    def calculate_metrics(self):
+        self.features = {}
+        self.calculate_hQ_values()
+        self.calculate_cQ_values()
+        self.calculate_sQ_values()
+        self.calculate_node_metrics()
+        return
 
     def get_allowed_hypervisor_pairs_by_switch(self, get_all: bool = False):
         """Return the hypervisor pairs that enable control paths
@@ -165,6 +222,7 @@ class NetworkOperator:
     #@measure
     def hypervisor_placement(self, **kwargs):
         # print(kwargs.keys())
+        logging.debug(kwargs.keys())
         self.info.update(kwargs)
 
         result, self.info['hp_runtime'] = hypervisor_placement_solutions(

@@ -12,6 +12,8 @@ import numpy as np
 # Local application/library specific imports.
 import src.data.graph_utilities as gu
 import src.models.ilp as ilp
+import src.models.gnn as gnn
+import src.models.hypervisor_assignment as ha
 from src.logger import measure
 
 heuristics = {}
@@ -408,7 +410,7 @@ def hp_combined_S_CS(network_operator=None,
                      Qhh=None,
                      Ts=None,
                      n_hypervisors=None,
-                     heuristic_randomness=0.5,
+                     heuristic_randomness=0.2,
                      **kwargs):
     """Greedy algorithm for the combined switch and controller placement problem."""
 
@@ -481,23 +483,8 @@ def hp_combined_S_CS(network_operator=None,
 
     return {
         'active_hypervisors': H_used,
-        'hypervisor assignment': hypervisor_assignment(S, H_used, Qhh),
+        'hypervisor assignment': ha.methods['max_control_options'](S, H_used, Qhh),
     }
-
-
-def hypervisor_assignment(S, H_used, Qhh):
-    Q_counts = {}
-    for h1, h2 in itertools.product(H_used, H_used):
-        Q_counts[(h1, h2)] = collections.Counter(
-            [s for (c, s) in Qhh.get((h1, h2), [])])
-    logging.debug("Q_counts: %s", Q_counts)
-
-    hypervisor_assignment = {
-        s: max(Q_counts, key=lambda x: Q_counts[x][s])
-        for s in S
-    }
-    logging.debug("Hypervisor assignment: %s", hypervisor_assignment)
-    return hypervisor_assignment
 
 
 def heuristic_repeated(heuristic_name: str = None,
@@ -559,10 +546,59 @@ def heuristic_repeated(heuristic_name: str = None,
         return None
 
 
+def gnn_hypervisor_scoring(network_simulation, **kwargs):
+    gnn_model = gnn.load_model(**kwargs)
+    logging.debug(f"Model: {gnn_model}")
+    dgl_graph = gnn.create_dgl_graph(network_simulation)
+    features = dgl_graph.ndata['features']
+    logits = gnn_model(dgl_graph, features)
+    scores = logits.detach().numpy().reshape(-1)
+    logging.debug(f"Scores: {scores}")
+    return scores
+
+
+def gnn_hypervisor_placement(network_simulation,
+                             n_hypervisors: int = None,
+                             **kwargs):
+    logging.info("GNN hypervisor placement")
+    scores = gnn_hypervisor_scoring(network_simulation, **kwargs)
+    hypervisors = np.argsort(scores)[-n_hypervisors:]
+    return heuristic_repeated(heuristic_name='hp_combined_S_CS',
+                                repeat=50,
+                                candidate_selection='acceptance',
+                                n_hypervisors=n_hypervisors,
+                                network_simulation=network_simulation,
+                                **kwargs)
+
+def gnn_ilp_hypervisor_placement(network_simulation,
+                             **kwargs):
+    logging.info("GNN-ILP hypervisor placement")
+    scores = gnn_hypervisor_scoring(network_simulation, **kwargs)
+    return ha.methods['ilp_assignment'](
+            hypervisor_scores=scores,
+            **kwargs
+        )
+
+def gnn_heuristic_hypervisor_placement(network_simulation,
+                             n_hypervisors: int = None,
+                             **kwargs):
+    logging.info("GNN heuristic hypervisor placement")
+    scores = gnn_hypervisor_scoring(network_simulation, **kwargs)
+    hypervisors = np.argsort(scores)[
+        -min(n_hypervisors*2, len(network_simulation.network_operator.nodes)):]
+    network_simulation.network_operator.possible_hypervisors = list(hypervisors)
+    result = heuristic_repeated(heuristic_name='hp_combined_S_CS',
+                                n_hypervisors=n_hypervisors,
+                                **kwargs)
+    network_simulation.network_operator.possible_hypervisors = list(network_simulation.network_operator.nodes)
+    return result
+
 @measure
 def hypervisor_placement_solutions(hp_type: str = 'heuristics',
                                    hp_objective: str = 'hypervisor count',
                                    **kwargs):
+    logging.debug(f"HP type: {hp_type}")
+    logging.debug(f"HP objective: {hp_objective}")
     if hp_type == 'heuristics':
         if hp_objective == 'hypervisor count':
             return heuristic_repeated(heuristic_name='greedy_max_cover',
@@ -576,5 +612,10 @@ def hypervisor_placement_solutions(hp_type: str = 'heuristics',
                                       **kwargs)
     elif hp_type == 'ilp':
         return ilp.lcrhpp(**kwargs)
-
+    elif hp_type == 'gnn':
+        return gnn_hypervisor_placement(**kwargs)
+    elif hp_type == 'gnn_ilp':
+        return gnn_ilp_hypervisor_placement(**kwargs)
+    elif hp_type == 'gnn_heuristic':
+        return gnn_heuristic_hypervisor_placement(**kwargs)
     return None
